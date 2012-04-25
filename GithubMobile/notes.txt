@@ -1,0 +1,17 @@
+start screen:
+New user- create and account and register in application user bank
+Existing user:
+menu- recent repos, new repo, open repo, switch user account,
+
+in repo mode:
+commit stuff
+repo stuff
+branch stuff
+help
+options
+
+commit screen:
+Unstaged/Staged changes
+current branch
+create commit
+[PUSH]

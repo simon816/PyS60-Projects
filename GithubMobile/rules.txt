@@ -1,0 +1,2 @@
+only repositories from github are compatible with this.
+the repository must exist on the github server.
