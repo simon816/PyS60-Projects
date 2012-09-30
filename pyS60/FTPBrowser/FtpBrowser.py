@@ -1,4 +1,6 @@
-import appuifw as ui, e32, StringIO, os, zipfile, e32dbm, random
+import appuifw as ui, e32, StringIO, os, zipfile, e32dbm, random, graphics
+from sysinfo import display_pixels as scr
+from Topwindow import TopWindow
 from ftplib import all_errors, FTP
 app=ui.app;lk=e32.Ao_lock();
 def u(u):return unicode(u)
@@ -6,6 +8,49 @@ def replace_all(text, dic):
  for i, j in dic.iteritems():
   text = text.replace(i, j)
  return text
+
+class loader:
+ def __init__(self,img,ani_xy=100):
+  self.ani_xy=ani_xy
+  self.img=img.resize((self.ani_xy,self.ani_xy))
+  self.gif=TopWindow()
+  self.gif.size=(ani_xy, ani_xy)
+  self.gif.position=self.get_mid((ani_xy,ani_xy))
+  self.txt=TopWindow()
+  self.blank=graphics.Image.new((1,1))
+  self.ani_xy=ani_xy
+ def get_mid(self, d):
+  return ((scr()[0]-d[0])/2,(scr()[1]-d[1])/2)
+ def addtext(self,text,update=0):
+  size=self.img.measure_text(text)
+  t_w,t_h=(size[0][2],(size[0][1]*-1)+size[0][3])
+  self.text=graphics.Image.new((t_w,t_h))
+  self.text.text((0,12), text)
+  self.txt.size=(t_w,t_h)
+  mid=self.get_mid((t_w,self.ani_xy))
+  self.txt.position=(mid[0],mid[1]+self.ani_xy)
+  if update:self.disp_text()
+ def rotate(self):
+  e32.ao_sleep(0.05)
+  self.gif.remove_image(self.img, (0,0))
+  self.img=self.img.transpose(graphics.ROTATE_90)
+  self.gif.add_image(self.img, (0,0))
+ def start(self):
+  self.gif.show()
+  self.txt.show()
+ def stop(self):
+  self.gif.hide()
+  self.txt.hide()
+ def disp_text(self):
+  #self.txt.add_image(self.blank,(0,0))
+  try:
+   self.txt.remove_image(self.blank);
+   #print 'removed'
+  except ValueError:print 'not removed'
+  self.txt.add_image(self.text,(0,0))
+  self.gif.add_image(self.img, (0,0))
+  del self.text
+  self.rotate()
 
 class ftpbrowser:
  def dev(self, feat):
@@ -32,7 +77,7 @@ class ftpbrowser:
   self.exit(self.quit)
 
  def form(self, args):
-  return [(u'Conn. name', 'text', args[0]), (u'Host', 'text',args[1]),(u'Port', 'number', args[2]), (u'User nm.', 'text', args[3]), (u'Password', 'text', args[4]), (u'Initial Dir', 'text', args[5]), (u'Passive', 'combo', ([u'True', u'False'], args[6]))]
+  return [(u'Connection Name', 'text', args[0]), (u'Host', 'text',args[1]),(u'Port', 'number', args[2]), (u'Username', 'text', args[3]), (u'Password', 'text', args[4]), (u'Initial Directory', 'text', args[5]), (u'Passive Mode', 'combo', ([u'True', u'False'], args[6]))]
 
  def mod_db(self, key, value):
   s=''
@@ -168,29 +213,26 @@ class ftpbrowser:
 
 
  def newcon(self):
-  flags=ui.FFormEditModeOnly
   f=self.form([u'',u'',21,u'',u'', u'/', 0])
-  f=ui.Form(f, flags)
+  f=ui.Form(f, 17)
   f.execute()
   self.savecon(f, 'true')
 
  def editcon(self):
   name=self.interface[app.body.current()]
-  flags=ui.FFormEditModeOnly
   if self.get_db('mode')=='flatfile':f=open(self.get_db('account_dir')+'\\'+name+'.acc');data=f.read();f.close();data=data.split('\n')
   elif self.get_db('mode')=='SQL':data=self.get_db('acc_'+name, 'list')
   if data[5]=='true':p=0
   else: p=1
   form=self.form([u(name),u(data[0]),int(float(data[1])),u(data[2]),u(self.decodestring(data[3],self.get_db('a'))),u(data[4]),p])
-  f=ui.Form(form, flags)
+  f=ui.Form(form, 17)
   f.execute()
   self.savecon(f)
 
- def savecon(self, f, append='false'):
+ def savecon(self, f, dele=0):
    if f[6][2][1]==0: p='true'
    else:p='false'
-  #try:
-   if f[0][2]==u'' or f[1][2]==u'':raise ValueError
+   if f[0][2]==u'' or f[1][2]==u'':ui.note(u'Not enough data provided', 'error');return 0
    if self.get_db('mode')=='flatfile':fi=open(self.get_db('account_dir')+'\\'+f[0][2]+'.acc', 'w');m='ff'
    elif self.get_db('mode')=='SQL':fi=StringIO.StringIO();m='sql'
    for d in range(len(f)-1):
@@ -201,15 +243,13 @@ class ftpbrowser:
    elif m=='sql':
     fi.seek(0);d=fi.read();fi.close()
     self.mod_db('acc_'+f[0][2], d.split('\n'))
-   if append=='true':self.connections.append(u(f[0][2]))
+   if dele:self.delcon(1)
    ui.note(u'Saved', 'conf')
    self.conscr()
-  #except:
-   #ui.note(u'Did not save')
 
- def delcon(self):
+ def delcon(self,ok=0):
   name=self.interface[app.body.current()]
-  ok=ui.query(u'Are you sure you want to delete "'+name+'"', 'query')
+  if not ok:ok=ui.query(u'Are you sure you want to delete "'+name+'"', 'query')
   if ok==1:
    if self.get_db('mode')=='flatfile':os.unlink(self.db['account_dir']+'/'+name+'.acc')
    elif self.get_db('mode')=='SQL':del self.db['acc_'+name]
@@ -224,7 +264,8 @@ class ftpbrowser:
    self.ftp.connect(self.host, int(float(opts[1])))
    self.ftp.set_pasv(opts[5])
    self.ftp.login(self.user, self.decodestring(opts[3], self.get_db('a')))
-   self.ftp.cwd(str(opts[4]))
+   self.l=loader(graphics.Image.open('e:\\loading.gif'),100);self.pwd=''
+   self.chdir(str(opts[4]))
    return 1
   except all_errors[1], e:ui.note(u'could not connect\n'+u(e), 'error');self.conscr();
   except all_errors[0], e:ui.note(u'could not login\n(Bad username/password)', 'error');self.disconnect();self.conscr();
@@ -232,15 +273,20 @@ class ftpbrowser:
  def connect(self,name):
   self.name=name
   if self.login()==1:
-   ui.note(u(self.ftp.getwelcome()), 'info', 1)
+   ui.note(u(self.ftp.getwelcome()), 'info')
    self.menu=[
     (u'File...', (
         (u'Open', self.open), 
         (u'Download', self.download), 
-        (u'File Info', self.fileinfo)
+        (u'File Info', self.fileinfo),
+        (u'Rename', self.rename)
+    )),
+    (u'Edit...', (
+        (u'Cut', self.cut),
+        (u'Copy', self.copy)
     )),
     (u'View...', (
-        (u'Refresh', self.dispdir),
+        (u'Refresh', self.refresh),
         (u'Change path', self.dummy)
      )), 
      (u'Upload', self.upload),
@@ -251,10 +297,11 @@ class ftpbrowser:
      )), 
      (u'Send Command', self.sendcmd),
      (u'Disconnect', self.disconnect)]
-   self.dispdir()
 
  def sendcmd(self):
-  print self.ftp.sendcmd(ui.query(u'Command','text')).read()
+  print self.ftp.sendcmd(ui.query(u'Command','text'))
+
+ def refresh(self):self.l.start();self.dispdir()
 
  def dispdir(self):
   try:
@@ -263,15 +310,16 @@ class ftpbrowser:
    app.body=self.disp(self.actions)
    self.exit(self.disconnect)
    app.menu=self.menu
+   self.l.stop()
   except all_errors, e:self.disperr(str(e), [self.dispdir])
 
  def reconnect(self, func, *action):
   if self.login()==1:
-   ui.note(u'reconnected', 'conf', 1)
+   self.l.addtext(u'reconnected', 1)
    if action==[]:func()
-   else:self.ftp.cwd(self.pwd);func(*action)
+   else:self.chdir('');func(*action)
   else:
-   if not self.rety==1:
+   if not self.retry==1:
     ui.note(u'Connection was dropped but could not reconnect', 'error')
     ui.note(u'retrying...', 'info', 1);self.retry=1
     self.reconnect(func, *action)
@@ -287,6 +335,7 @@ class ftpbrowser:
  def getwd(self,dirname=None):
   if not dirname:self.pwd=dr=self.ftp.pwd()
   else:dr=dirname
+  self.l.addtext(u'Retrieving files', 1)
   s=StringIO.StringIO();self.ftp.retrbinary('LIST '+dr,s.write);s.seek(0);li=s.read();s.close();
   fs=[];l=[];a=li.split("\r\n");folder=ui.Icon(u(self.get_db('icons')), 115, 116);d=f=[];l.append((u'..', folder));self.amt=len(a)-1
   if li:
@@ -316,10 +365,11 @@ class ftpbrowser:
   else:self.open()
  
  def chdir(self, dir):
+  self.l.start()
   try:
-   if dir=='..':self.ftp.cwd('..');ui.note(u'Going up one', 'info', 1)
+   if dir=='..':self.ftp.cwd('..');self.l.addtext(u'Going up one', 1)
    else:
-    ui.note(u'changing directory to '+dir, 'info', 1);self.ftp.cwd(self.pwd+'/'+dir)
+    self.l.addtext(u'changing directory to '+u(dir), 1);self.ftp.cwd(self.pwd+'/'+dir)
    self.dispdir()
   except all_errors, e:self.disperr(str(e), [self.chdir, dir])
 
@@ -330,93 +380,174 @@ class ftpbrowser:
   ui.note(u(s))
   print s
 
+ def submenu(self, mode='r', *args):
+  subindex=args[0]
+  obj=list(self.menu[subindex][1])
+  try:
+   if mode in ['r','w']:index=[x[0].lower() for x in self.menu[subindex][1]].index(u(args[1].lower()))
+  except:return 0
+  if    mode=='r':return index
+  elif mode=='w':obj[index]=args[1]
+  elif mode=='a':obj.insert(args[1], args[2])
+  elif mode=='d':del obj[args[1]]
+  self.menu[subindex]=(self.menu[subindex][0], tuple(obj))
+
+ def cut(self):
+  self.sel=self.getsel()
+  self.cbd=[self.sel[1][0],self.pwd+'/',self.sel[9], 'cut']
+  if not self.submenu('r', 1, 'Paste'):self.submenu('a', 1, 2, (u'Paste', self.paste))
+
+ def copy(self):
+  self.sel=self.getsel()
+  self.cbd=[self.sel[1][0],self.pwd+'/',self.sel[9], 'copy']
+  if not self.submenu('r', 1, 'Paste'):self.submenu('a', 1, 2, (u'Paste', self.paste))
+
+ def paste(self):
+  self.l.start()
+  self.submenu('d', 1, 2)
+  if self.cbd[0]=='-':
+   fh=StringIO.StringIO()
+   self.ftp.retrbinary('RETR '+self.cbd[1]+self.cbd[2], fh.write)
+   if self.cbd[3]=='cut':self.l.addtext(u'Deleting... '+u(self.cbd[1]+self.cbd[2]),1);self.ftp.delete(self.cbd[1]+self.cbd[2])
+   fh.seek(0);self.l.addtext(u'Pasting '+u(self.cbd[2]),1)
+   self.ftp.storbinary('STOR '+self.cbd[2],fh)
+   fh.close()
+  else:
+   self.dirdict={'reverse':[]}
+   self.loopdir(self.cbd[1]+self.cbd[2])
+   for dir in self.dirdict['reverse']:
+    self.l.addtext(u'Make directory '+u(dir),1)
+    self.ftp.mkd(dir[len(self.cbd[1]):])
+    for file in self.dirdict[dir]:
+     self.l.addtext(u(dir+'/'+file),1)
+     fh=StringIO.StringIO()
+     self.ftp.retrbinary('RETR '+dir+'/'+file, fh.write);fh.seek(0)
+     if self.cbd[3]=='cut':self.l.addtext(u'Deleting... '+u(dir+'/'+file),1);self.ftp.delete(dir+'/'+file)
+     self.ftp.storbinary('STOR '+dir[len(self.cbd[1]):]+'/'+file,fh)
+     fh.close()
+   self.dirdict['reverse'].reverse()
+   if self.cbd[3]=='cut':
+    for dir in self.dirdict['reverse']:
+     self.l.addtext(u'Deleting Directory... '+u(dir),1)
+     self.ftp.rmd(dir)
+  self.dispdir()
+
  def newdir(self):
   name=ui.query(u"New Folder", 'text')
-  if not name==u'':self.ftp.mkd(name);self.dispdir()
+  if not name==u'':self.l.addtext(u'Making Directory "'+name+'"',1);self.ftp.mkd(name);self.dispdir()
 
- def savelocal(self):
+ def mkcache(self, pwd):
   try:
    cd='\\'+self.user+'@'+self.host
    cd=cd.strip()
-   self.mkdir([self.db['cashe_dir']+cd])
-   dir=self.db['cashe_dir']+cd+self.pwd
+   self.mkdir([self.get_db('cashe_dir')+cd])
+   dir=self.get_db('cashe_dir')+cd+pwd
    self.mkdir([dir])
-  except:ui.note(u'could not create cashe, downloading to save directory (set in settings)', 'error');dir=self.db['defaultdir']
+  except:ui.note(u'could not create cashe, downloading to save directory (set in settings)', 'error');dir=self.get_db('defaultdir')
+  self.cache=dir
+
+ def savelocal(self, block):
   try:
-   f=open(dir+'\\'+self.sel[9], 'w')
-   tmp=open('e:\\tmp.tmp', 'r')
-   f.write(tmp.read())
+   try:f=open(self.cache+'\\'+self.sel[9], 'ab')
+   except:f=open(self.cache+'\\'+self.sel[9], 'w')
+   f.write(block)
    f.close()
-   tmp.close()
-   os.remove('e:\\tmp.tmp')
    self.dcomp=1
   except:ui.note(u'Could not download file. read only access?\nAborting transfer', 'error');self.ftp.abort()
   #self.ftp.sendcmd('type a')
 
  def download(self):
   self.pwd=self.ftp.pwd()
-  #self.ftp.sendcmd('type i')
   self.sel=self.getsel()
   try:
-   ui.note(u'Downloading '+self.sel[9], 'info', 1);self.binary="";self.ftp.retrbinary('RETR '+self.sel[9], self.getbin, self.get_db('blocksize', 'int'));self.savelocal()
-   if self.dcomp==1:ui.note(u'Download complete', 'conf');self.dcomp=0
+   self.l.start()
+   self.l.addtext(u'Downloading '+u(self.sel[9]), 1)
+   self.mkcache(self.pwd)
+   if self.sel[1][0]=='-':
+    self.ftp.retrbinary('RETR '+self.sel[9], self.savelocal, self.get_db('blocksize', 'int'))
+   else:self.downloaddir()
+   if self.dcomp==1:ui.note(u'Download complete', 'conf');self.dcomp=0;del self.cache;self.l.stop()
   except all_errors, e:self.disperr(str(e), self.download)
+
+ def downloaddir(self):
+  self.dirdict={'reverse':[]}
+  self.loopdir(self.pwd+'/'+self.sel[9])
+  del self.dirdict['reverse']
+  self._sel=self.sel
+  for dir in self.dirdict:
+   self.l.addtext(u'Make Directory '+u(dir),1)
+   self.mkcache(dir)
+   for file in self.dirdict[dir]:
+    self.sel=['','','','','','','','','',file]
+    self.l.addtext('Downloading '+u(file),1)
+    self.ftp.retrbinary('RETR '+dir+'\\'+file, self.savelocal, self.get_db('blocksize', 'int'))
+  self.dcomp=1;self.sel=self._sel;del self._sel
 
  def upload(self, file=None):
    if file==None:file=ui.query(u'Please specify the path to the file', 'text')
+   e=0
   #try:
-   if zipfile.is_zipfile(file):e=ui.query(u'Zipfile detected, extract contents to current directory?', 'query')
+   if zipfile.is_zipfile(file):
+    e=ui.query(u'Zipfile detected, extract contents to current directory?', 'query')
+   self.l.start()
    if not e==1:
     f=open(file, 'r')
     try:
-     n=f.name;n=replace_all(n, {'/':'\\'}).split('\\');self.ftp.storbinary('STOR '+n[len(n)-1], f, self.get_db('blocksize', 'int'));ui.note(u'Uploaded', 'conf', 1);self.dispdir()
+     self.l.addtext(u'Uploading '+u(f.name),1)
+     n=f.name;n=replace_all(n, {'/':'\\'}).split('\\');self.ftp.storbinary('STOR '+n[len(n)-1], f, self.get_db('blocksize', 'int'));ui.note(u'Uploaded', 'conf', 1)
     except all_errors, e:self.disperr(str(e), [self.upload,file])
     f.close()
    else:self.up_zip(file)
+   self.dispdir()
   #except IOError, e:
   # ui.note(u'file error', 'error'+u(e));retry=ui.query(u'Retry?', 'query')
    #if retry==1:self.upload()
 
  def up_zip(self, file):
-  ui.note(u'upping zip')
   z=zipfile.ZipFile(file)
   wd=self.get_db('cashe_dir')+'\\'+self.user+'@'+self.host+replace_all(self.pwd, {'/':'\\'})+'\\';
   wd=wd.strip();
-  ui.note(u(wd))
-  print wd
   self.mkdir([wd])
   for f in z.namelist():
    if f.endswith('/'):
     #if not os.path.exists(wd+f):
+     self.l.addtext(u'Make Directory '+u(f),1)
      self.mkdir([wd+f]);self.ftp.mkd(f)
    else:
      fh=open(wd+f, 'w')
      fh.write(z.read(f))
      fh.close()
      fi=open(wd+f, 'r')
+     self.l.addtext(u'Uploading '+u(f), 1)
      self.ftp.storbinary('STOR '+f, fi,self.get_db('blocksize', 'int'))
      fi.close()
+  self.dispdir()
+
+ def rename(self):
+  frm=self.getsel()[9]
+  self.ftp.rename(frm, ui.query(u'Rename '+u(frm), 'text', u(frm)))
   self.dispdir()
 
  def delete(self):
   self.sel=self.getsel()
   conf=ui.query(u"Delete "+self.sel[9]+"?", 'query')
   if conf==1:
+   self.l.start()
    try:
-    if not self.sel[1][0]=='d':self.ftp.delete(self.pwd+'/'+self.sel[9]);ui.note(u'deleted', 'conf', 1)
+    if not self.sel[1][0]=='d':self.l.addtext(u'Deleting '+u(self.sel[9]),1);self.ftp.delete(self.pwd+'/'+self.sel[9])
     else:
-     try:self.ftp.rmd(self.sel[9]);ui.note(u'deleted', 'conf', 1)
+     try:self.l.addtext(u'Removing Directory '+u(self.sel[9]), 1);self.ftp.rmd(self.sel[9])
      except all_errors, e:
       if str(e)[:3]=='550':
        if ui.query(u'Driectory is not empty, delete all sub directories and files?', 'query')==1:
         self.dirdict={'reverse':[]}
-        self.loopdir(self.pwd+self.sel[9])
+        self.loopdir(self.pwd+'/'+self.sel[9])
         self.dirdict['reverse'].reverse()
         for dir in self.dirdict['reverse']:
          for file in self.dirdict[dir]:
+          self.l.addtext(u(dir+'/'+file),1)
           self.ftp.delete(dir+'\\'+file)
          self.ftp.rmd(dir)
-        self.ftp.rmd(self.sel[9])
       else:raise e
     self.dispdir()
    except all_errors, e:self.disperr(str(e), [self.delete])
@@ -427,7 +558,7 @@ class ftpbrowser:
   self.getwd(initdir)
   for file in self.fs:
    if file[1][0]=='d':
-    self.loopdir(initdir+'\\'+file[9])
+    self.loopdir(initdir+'/'+file[9])
    else:self.dirdict[initdir].append(file[9])
 
  def retr(self):
@@ -437,10 +568,7 @@ class ftpbrowser:
   except all_errors, e:self.disperr(str(e), [self.retr])
 
  def getbin(self, data):
-  try:f=open('e:\\tmp.tmp', 'ab')
-  except:f=open('e:\\tmp.tmp', 'w')
-  f.write(data)
-  f.close()
+  self.binary+=data
 
  def parcebin(self):
   bin=self.binary
@@ -478,7 +606,7 @@ class ftpbrowser:
   else:
    ui.note(u'Cannot open file for editing', 'error')
    dld=ui.query(u'Download '+self.sel[9]+u' instead?', 'query')
-   if dld==1:self.savelocal()
+   if dld==1:self.mkcache(self.pwd);self.savelocal(self.binary)
   
  def save(self):
   s = lambda s: s.encode('utf-8')
