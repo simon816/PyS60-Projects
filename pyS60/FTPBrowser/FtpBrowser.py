@@ -1,9 +1,12 @@
 import appuifw as ui, e32, StringIO, os, zipfile, e32dbm, random, graphics
 from sysinfo import display_pixels as scr
-from Topwindow import TopWindow
+from topwindow import TopWindow
 from ftplib import all_errors, FTP
 app=ui.app;lk=e32.Ao_lock();
-def u(u):return unicode(u)
+def u(u):
+ try:u=unicode(u)
+ except:u=unicode('!error!')
+ return u
 def replace_all(text, dic):
  for i, j in dic.iteritems():
   text = text.replace(i, j)
@@ -31,7 +34,7 @@ class loader:
   self.txt.position=(mid[0],mid[1]+self.ani_xy)
   if update:self.disp_text()
  def rotate(self):
-  e32.ao_sleep(0.05)
+  e32.ao_sleep(0.01)
   self.gif.remove_image(self.img, (0,0))
   self.img=self.img.transpose(graphics.ROTATE_90)
   self.gif.add_image(self.img, (0,0))
@@ -43,10 +46,9 @@ class loader:
   self.txt.hide()
  def disp_text(self):
   #self.txt.add_image(self.blank,(0,0))
-  try:
-   self.txt.remove_image(self.blank);
-   #print 'removed'
-  except ValueError:print 'not removed'
+  try:self.txt.remove_image(self.text);
+  except ValueError,e:pass#print 'not removed e='+str(e)
+  self.txt.images=[]
   self.txt.add_image(self.text,(0,0))
   self.gif.add_image(self.img, (0,0))
   del self.text
@@ -264,7 +266,7 @@ class ftpbrowser:
    self.ftp.connect(self.host, int(float(opts[1])))
    self.ftp.set_pasv(opts[5])
    self.ftp.login(self.user, self.decodestring(opts[3], self.get_db('a')))
-   self.l=loader(graphics.Image.open('e:\\loading.gif'),100);self.pwd=''
+   self.l=loader(graphics.Image.open('e:\\Python\\apps\\simon816\\ftpbrowser\\loading.gif'),100);self.pwd=''
    self.chdir(str(opts[4]))
    return 1
   except all_errors[1], e:ui.note(u'could not connect\n'+u(e), 'error');self.conscr();
@@ -327,6 +329,7 @@ class ftpbrowser:
 
  def disperr(self, e, action):
   if e[:3]=='421' or tuple(e)[0]==13:self.reconnect(*action)
+  elif e=="(13, 'Permission denied')":self.reconnect(*action)
   elif e=="(32, 'Broken pipe')":
    ui.note(u'Unexpectly lost connection with '+self.host, 'error');reconn=ui.query(u'Reconnect?', 'query')
    if reconn==1:self.reconnect(*action)
@@ -572,7 +575,7 @@ class ftpbrowser:
 
  def parcebin(self):
   bin=self.binary
-  self.t=ui.Text();self.t.color=0x000000;self.t.font=(u"nokia hindi s60",14,16)
+  self.t=ui.Text();self.t.color=0x000000;self.t.font=self.get_db('font', 'tuple')
   try:
    self.t.set(u(bin))
   except UnicodeError:
@@ -585,7 +588,7 @@ class ftpbrowser:
    if e.errno==-4:
     ui.note(u'OutOfMemory, splitting file into chunks', 'error')
     app.set_tabs([u'1', u'2',u'3'],self.dummy)
-    self.ftp.retrbinary('RETR '+self.sel[9], self.getbin, self.get_db('blocksize', 'int'));self.parcebin()
+    self.binary=bin[:1024];self.parcebin()
 
  def new(self):
   self.sel=self.getsel()
@@ -594,7 +597,12 @@ class ftpbrowser:
   app.body=self.t
   app.title=u(self.sel[9])
   self.exit(self.dispdir)
-  app.menu=[(u'Save', self.save)]
+  app.menu=[(u'Save', self.save),(u'Goto', ((u'Top',self.top),(u'Bottom',self.bottom)))]
+
+ def top(self):
+  self.t.set_pos(0)
+ def bottom(self):
+  self.t.set_pos(len(self.binary))
 
  def open(self):
   self.retr()
@@ -602,7 +610,7 @@ class ftpbrowser:
    app.body=self.t
    app.title=u(self.sel[9])
    self.exit(self.dispdir)
-   app.menu=[(u'Save', self.save)]
+   app.menu=[(u'Save', self.save),(u'Goto', ((u'Top',self.top),(u'Bottom',self.bottom)))]
   else:
    ui.note(u'Cannot open file for editing', 'error')
    dld=ui.query(u'Download '+self.sel[9]+u' instead?', 'query')
