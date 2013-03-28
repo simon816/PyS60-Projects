@@ -1,9 +1,12 @@
 import appuifw as ui, e32, StringIO, os, zipfile, e32dbm, random, graphics
 from sysinfo import display_pixels as scr
-from Topwindow import TopWindow
+from topwindow import TopWindow
 from ftplib import all_errors
 app=ui.app;lk=e32.Ao_lock();
-def u(u):return unicode(u)
+def u(u):
+ try:u=unicode(u)
+ except:u=unicode('!error!')
+ return u
 def replace_all(text, dic):
  for i, j in dic.iteritems():
   text = text.replace(i, j)
@@ -19,7 +22,10 @@ from time import localtime, time
 from stat import *
 class file:
  def __init__(self, host=''):
-  self.log=open('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(time())[:-2]+'.log', 'w')
+  mode='a'
+  if not os.path.exists('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(localtime().tm_yday)+'.log'):mode='w'
+  self.log=open('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(localtime().tm_yday)+'.log', mode)
+  #self.log=open('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(time())[:-2]+'.log', 'w')
   self.log.write('\r\n'+str(localtime().tm_yday)+'-'+T()+'\r\n')
   if host:self.connect(host)
   self.host=None
@@ -181,7 +187,7 @@ class loader:
   self.txt.position=(mid[0],mid[1]+self.ani_xy)
   if update:self.disp_text()
  def rotate(self):
-  e32.ao_sleep(0.05)
+  e32.ao_sleep(0.01)
   self.gif.remove_image(self.img, (0,0))
   self.img=self.img.transpose(graphics.ROTATE_90)
   self.gif.add_image(self.img, (0,0))
@@ -192,11 +198,10 @@ class loader:
   self.gif.hide()
   self.txt.hide()
  def disp_text(self):
-  self.txt.add_image(self.blank,(0,0))
-  try:
-   self.txt.remove_image(self.blank);
-   print 'removed'
-  except ValueError:print 'not removed'
+  #self.txt.add_image(self.blank,(0,0))
+  try:self.txt.remove_image(self.text);
+  except ValueError,e:pass#print 'not removed e='+str(e)
+  self.txt.images=[]
   self.txt.add_image(self.text,(0,0))
   self.gif.add_image(self.img, (0,0))
   del self.text
@@ -278,7 +283,7 @@ class ftpbrowser:
   except:
    ui.note(u'error', 'error')
 
- def quit(self):self.db.sync();self.db.close();lk.signal()
+ def quit(self):self.db.sync();self.db.close();lk.signal();self.tabs.hide_tabs()
  def exit(self, action):app.exit_key_handler=action
  def disp(self, cback):return ui.Listbox(self.interface, cback)
  def dummy(self):pass
@@ -288,6 +293,8 @@ class ftpbrowser:
 
  def run(self):
   self.mkdir([self.get_db('settings_dir'), self.get_db('account_dir'), self.get_db('cashe_dir')])
+  self.tabs=tabs()
+  self.tabs.new_tab(u'Home',self.mainscr)
   self.mainscr()
 
  def mainscr(self):
@@ -414,7 +421,7 @@ class ftpbrowser:
    self.ftp.connect(self.host, int(float(opts[1])))
    self.ftp.set_pasv(opts[5])
    self.ftp.login(self.user, self.decodestring(opts[3], self.get_db('a')))
-   self.l=loader(graphics.Image.open('e:\\loading.gif'),100);self.pwd=''
+   self.l=loader(graphics.Image.open('e:\\Python\\apps\\simon816\\ftpbrowser\\loading.gif'),100);self.pwd=''
    self.chdir(str(opts[4]))
    return 1
   except all_errors[1], e:ui.note(u'could not connect\n'+u(e), 'error');self.conscr();
@@ -424,6 +431,8 @@ class ftpbrowser:
   self.name=name
   if self.login()==1:
    ui.note(u(self.ftp.getwelcome()), 'info')
+   self.tabs.new_tab(u(name),self.dispdir)
+   self.tabs.select_tab(u(name))
    self.menu=[
     (u'File...', (
         (u'Open', self.open), 
@@ -447,6 +456,7 @@ class ftpbrowser:
      )), 
      (u'Send Command', self.sendcmd),
      (u'Disconnect', self.disconnect)]
+   app.menu=self.menu
 
  def sendcmd(self):
   print self.ftp.sendcmd(ui.query(u'Command','text'))
@@ -477,6 +487,7 @@ class ftpbrowser:
 
  def disperr(self, e, action):
   if e[:3]=='421' or tuple(e)[0]==13:self.reconnect(*action)
+  elif e=="(13, 'Permission denied')":self.reconnect(*action)
   elif e=="(32, 'Broken pipe')":
    ui.note(u'Unexpectly lost connection with '+self.host, 'error');reconn=ui.query(u'Reconnect?', 'query')
    if reconn==1:self.reconnect(*action)
@@ -584,7 +595,7 @@ class ftpbrowser:
 
  def newdir(self):
   name=ui.query(u"New Folder", 'text')
-  if not name==u'':self.ftp.mkd(name);self.dispdir()
+  if not name==u'':self.l.addtext(u'Making Directory "'+name+'"',1);self.ftp.mkd(name);self.dispdir()
 
  def mkcache(self, pwd):
   try:
@@ -722,7 +733,7 @@ class ftpbrowser:
 
  def parcebin(self):
   bin=self.binary
-  self.t=ui.Text();self.t.color=0x000000;self.t.font=(u"nokia hindi s60",14,16)
+  self.t=ui.Text();self.t.color=0x000000;self.t.font=self.get_db('font', 'tuple')
   try:
    self.t.set(u(bin))
   except UnicodeError:
@@ -735,7 +746,7 @@ class ftpbrowser:
    if e.errno==-4:
     ui.note(u'OutOfMemory, splitting file into chunks', 'error')
     app.set_tabs([u'1', u'2',u'3'],self.dummy)
-    self.ftp.retrbinary('RETR '+self.sel[9], self.getbin, self.get_db('blocksize', 'int'));self.parcebin()
+    self.binary=bin[:1024];self.parcebin()
 
  def new(self):
   self.sel=self.getsel()
@@ -744,7 +755,12 @@ class ftpbrowser:
   app.body=self.t
   app.title=u(self.sel[9])
   self.exit(self.dispdir)
-  app.menu=[(u'Save', self.save)]
+  app.menu=[(u'Save', self.save),(u'Goto', ((u'Top',self.top),(u'Bottom',self.bottom)))]
+
+ def top(self):
+  self.t.set_pos(0)
+ def bottom(self):
+  self.t.set_pos(len(self.binary))
 
  def open(self):
   self.retr()
@@ -752,7 +768,7 @@ class ftpbrowser:
    app.body=self.t
    app.title=u(self.sel[9])
    self.exit(self.dispdir)
-   app.menu=[(u'Save', self.save)]
+   app.menu=[(u'Save', self.save),(u'Goto', ((u'Top',self.top),(u'Bottom',self.bottom)))]
   else:
    ui.note(u'Cannot open file for editing', 'error')
    dld=ui.query(u'Download '+self.sel[9]+u' instead?', 'query')
@@ -795,6 +811,51 @@ def decode(s,n,r='', al=a):
    if ord(c) in range(0,10+n):r+=str(ord(c)-n+1)
    else:r+=chr(ord(s[z:z+1])-100)
  return r
+
+class tabs:
+ def __init__(self,tabs=[],callbacks=[]):
+  self.tabs=tabs
+  self.callback=callbacks
+  self.selected=0
+  self.update()
+ def update(self):
+  app.set_tabs(self.tabs, self.handler)
+  self.select_tab(self.selected)
+ def handler(self, index):
+  self.selected=index
+  try:self.callback[index]({'index':index,'name':self.tabs[index]})
+  except:
+   try:self.callback[index]()
+   except:pass
+ def new_tab(self,value, call,index=-1):
+  if value:
+   if index==-1:self.tabs.append(value);self.callback.append(call)
+   else:self.tabs.insert(index,value);self.callback.insert(index,call)
+   self.update()
+ def _getTab(self,tab):
+  try:
+   i=int(tab)
+   if i==len(self.tabs):raise 'OutOfRange'
+   else:return i
+  except:
+   try:return self.tabs.index(tab)
+   except:return None
+ def change_tab(self,tab,new,call=None):
+  i=self._getTab(tab)
+  if i or i==0 and new:self.tabs[i]=new
+  if call:self.callback[i]=call
+  self.update()
+ def select_tab(self,tab,doCall=0):
+  i=self._getTab(tab)
+  if i or i==0:
+   app.activate_tab(i)
+   self.selected=i
+   if doCall:self.handler(i)
+ def blank(self):pass
+ def hide_tabs(self):
+  app.set_tabs([],self.blank)
+ def show_tabs(self):self.update()
+ def reset(self):self.__init__()
 if __name__=="__main__":
  ftpbrowser().run()
 lk.wait()
