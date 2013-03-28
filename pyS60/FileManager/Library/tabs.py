@@ -1,12 +1,12 @@
-
+import appuifw
 class tabs:
- def __init__(self,tabs=[],callbacks=[]):
-  self.tabs=tabs
+ def __init__(self,initabs=[],callbacks=[]):
+  self.tabs=initabs
   self.callback=callbacks
   self.selected=0
   self.update()
  def update(self):
-  app.set_tabs(self.tabs, self.handler)
+  appuifw.app.set_tabs(self.tabs, self.handler)
   self.select_tab(self.selected)
  def handler(self, index):
   self.selected=index
@@ -35,7 +35,7 @@ class tabs:
  def select_tab(self,tab,doCall=0):
   i=self._getTab(tab)
   if i or i==0:
-   app.activate_tab(i)
+   appuifw.app.activate_tab(i)
    self.selected=i
    if doCall:self.handler(i)
  def delete_tab(self,tab):
@@ -47,6 +47,6 @@ class tabs:
  def current(self):return self.tabs[self.selected]
  def blank(self):pass
  def hide_tabs(self):
-  app.set_tabs([],self.blank)
+  appuifw.app.set_tabs([],self.blank)
  def show_tabs(self):self.update()
  def reset(self):self.__init__()
