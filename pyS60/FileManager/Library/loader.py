@@ -1,9 +1,12 @@
+import graphics
+import e32
 from sysinfo import display_pixels as scr
 from topwindow import TopWindow
-import graphics
+
 class loader:
  def __init__(self,img,ani_xy=100):
   self.status=0
+  self.wait=0.01
   self.ani_xy=ani_xy
   self.img=img.resize((self.ani_xy,self.ani_xy))
   self.gif=TopWindow()
@@ -24,8 +27,10 @@ class loader:
   self.txt.position=(mid[0],mid[1]+self.ani_xy)
   if update:self.disp_text()
  def rotate(self):
-  e32.ao_sleep(0.01)
-  self.gif.remove_image(self.img, (0,0))
+  def rem():
+   try:self.gif.remove_image(self.img, (0,0))
+   except:pass
+  e32.ao_sleep(self.wait,rem)
   self.img=self.img.transpose(graphics.ROTATE_90)
   self.gif.add_image(self.img, (0,0))
  def start(self):
