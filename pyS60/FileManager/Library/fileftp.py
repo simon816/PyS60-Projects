@@ -1,13 +1,25 @@
-from StringIO import StringIO as tmpfile
+import os
+import e32
+import StringIO
 from time import localtime, time
 from stat import *
+def print_line(line):print line
+from ftplib import Error
+#class Error(Exception): pass
+class error_reply(Error): pass
+class error_temp(Error): pass
+class error_perm(Error): pass
+class error_proto(Error): pass
+all_errors = (Error, IOError, EOFError)
 class fileftp:
- host=""
+# host=""
  wd=""
  def __init__(self, host=''):
   mode='a'
-  if not os.path.exists('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(localtime().tm_yday)+'.log'):mode='w'
-  self._log=open('e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+str(localtime().tm_yday)+'.log', mode)
+  date=str(localtime().tm_year)+'.'+str(localtime().tm_mon)+'.'+str(localtime().tm_mday)
+  logfile='e:\\Python\\apps\\simon816\\ftpbrowser\\logs\\'+date+'.log'
+  if not os.path.exists(logfile):mode='w'
+  self._log=open(logfile, mode)
   if host:self.connect(host)
   self.host=None
  def logWrite(self,s):
@@ -26,9 +38,9 @@ class fileftp:
   allcmds=['RETR', 'STOR', 'LIST', 'NLST', 'RNFR', 'RNTO', 'DELE', 'CDUP', 'CWD', 'SIZE', 'MKD', 'RMD', 'PWD', 'QUIT', 'HELP', 'USER']
   if cmd[:3] in allcmds:
    if cmd[:3]=='CWD':
-    os.chdir(cmd[4:]);self.wd=replace_all(os.getcwd(), {'\\':'/'})
+    os.chdir(cmd[4:]);self.wd=os.getcwd().replace('\\','/')
    if cmd[:3]=='PWD':
-    self.wd=replace_all(os.getcwd(), {'\\':'/'})
+    self.wd=os.getcwd().replace('\\','/')
     return self.wd
    if cmd[:3]=='MKD':os.mkdir(cmd[4:])
    if cmd[:3]=='RMD':
@@ -37,13 +49,13 @@ class fileftp:
      if e.errno==17:raise error_reply, '550 Directory not empty.'
   elif cmd[:4] in allcmds:
    if cmd[:4]=='DELE':os.unlink(cmd[5:])
-   if cmd[:4]=='CDUP':os.chdir('..');self.wd=replace_all(os.getcwd(), {'\\':'/'})
+   if cmd[:4]=='CDUP':os.chdir('..');self.wd=os.getcwd().replace('\\','/')
    if cmd[:4]=='RNFR':self.tmp=cmd[5:]
    if cmd[:4]=='RNTO':
     if self.tmp:os.rename(self.tmp, cmd[5:])
    if cmd[:4]=='SIZE':resp=os.path.getsize(self.pwd()+cmd[4:])
    if cmd[:4]=='NLST':
-    fp=tmpfile();s=''
+    fp=StringIO.StringIO();s=''
     for l in os.listdir(cmd[5:]):s+=l+'\n'
     fp.write(s);fp.seek(0)
     resp= fp
@@ -53,7 +65,7 @@ class fileftp:
      if e.errno==13: raise error_perm, '550 No such file or directory.'
    if cmd[:4]=='STOR':resp=open(self.wd+'/'+cmd[5:], 'w')
    if cmd[:4]=='LIST':
-    f=tmpfile()
+    f=StringIO.StringIO()
     if len(cmd)<6:dir=self.wd
     else:dir=self.drive+cmd[5:]+'\\'
     if dir:files=os.listdir(dir)
