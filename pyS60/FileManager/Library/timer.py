@@ -1,4 +1,4 @@
-
+import e32
 class Timer:
  def __init__(self,call):
   self.callback=call
