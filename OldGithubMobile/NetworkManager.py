@@ -1,28 +1,28 @@
-
-class Request:
- def __init__(self):
-  host='api.github.com'
-  self.con=httplib.HTTPSConnection(host)
+import httplib
+from simon816 import json
+host='api.github.com'
+con=httplib.HTTPSConnection(host)
+headers={}
+def connect():
+ try:
+  con.connect()
+ except httplib.socket.gaierror,e:
+  appuifw.note(u'Could not connect to %s\n%s'%(host,e[1]),'error')
+def close():
+ con.close()
+def syncronous(method,url,data):
   try:
-   self.con.connect()
-  except httplib.socket.gaierror,e:
-   appuifw.note(u'Could not connect to %s\n%s'%(host,e[1]),'error')
-  self.headers={}
- def close(self):
-  self.con.close()
- def syncronous(self,method,url,data):
-  try:
-   self.con.request(method,url,data,self.headers)
-   resp=self.con.getresponse()
+   con.request(method,url,data,headers)
+   resp=con.getresponse()
   except httplib.socket.gaierror:
    appuifw.note(u"Could not send request for %s"%url)
    return
-  return self.ResponsePackage([method,url],resp)
- def GET(self,url):
-  return self.syncronous('GET',url,None)
- def POST(self,url,data):
-  return self.syncronous('POST',url,json.encode(data))
- class ResponsePackage:
+  return ResponsePackage([method,url],resp)
+def GET(url):
+  return syncronous('GET',url,None)
+def POST(self,url,data):
+  return syncronous('POST',url,json.encode(data))
+class ResponsePackage:
   class RespError(Exception):
    def __init__(self,code,msg,resp):
     self.code,self.msg,self.json=code,msg,json.decode(resp)

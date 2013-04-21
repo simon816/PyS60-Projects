@@ -1,8 +1,9 @@
+from GithubGlobals import *
 class RepositoryManager:
  def __init__(self, con):
   self.con=con
   self.repos={}
-  self.db=util.util.db(DIRECTORY+'repos','c')
+  self.db=util.db(DIRECTORY+'repos','c')
  def loadRepos(self,allrepos):
   for repo in allrepos:
    name=repo['name']
@@ -33,7 +34,8 @@ class Repository:
   self.author=info['owner']['login']
   self.baseurl='/repos/%s/%s'%(self.author,self.name)
   self.dir=self._db.get(self.name)
-  mkdir([self.dir+'\\.git'])
+  self.cache=cache.createCache(self.dir+'\\.git')
+  self.cache.bindToRepo(self)
  def __str__(self):
   return '<%s Repository from %s>'%(self.name,self.author)
  def TakeControl(self,exitfunction):
@@ -91,7 +93,7 @@ class Repository:
  def displayInfo(self):
   pass
  def changePath(self):
-  path=util.util().select('dir',self.dir)
+  path=util.select('dir',self.dir)
   if not path:return
   self._db.mod(self.name,path)
   self.dir=path

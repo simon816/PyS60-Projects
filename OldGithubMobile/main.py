@@ -1,14 +1,8 @@
-from simon816 import json,util
-import appuifw,e32,httplib,base64,os
-
-DIRECTORY='E:\\Python\\apps\\simon816\\GithubMobile\\'
-mkdir=util.util().mkdir
+import e32,os
+from GithubGlobals import *
 from UserManager import UserManager
-"""
-Notes:
-class *Manager: container for class *
-class * instance of that object eg Repository 
-"""
+import NetworkManager
+from RepoManager import RepositoryManager
 class GithubMobile:
  """ The main class and interface """
  def __init__(self):
@@ -19,7 +13,7 @@ class GithubMobile:
   os.chdir(self.directory)
   self.Users=UserManager(self.directory)
   self.start()
-  self.RequestHost=Request()
+  self.RequestHost=NetworkManager
   self.RepositoryHost=RepositoryManager(self.RequestHost)
   self.mainlock=lock
   lock.wait()
@@ -56,7 +50,7 @@ class GithubMobile:
   except resp.ClientError,e:
    appuifw.note(unicode(e.json['message']),'error')
    return
-  mkdir([uname])
+  util.mkdir([uname])
   os.chdir(uname)
   self.RepositoryHost.loadRepos(json)
   self.displayRepos()
