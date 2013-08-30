@@ -23,7 +23,8 @@ class util:
   if not initdir[-1:]=="\\":initdir+="\\"
   dirsonly=type=="dir"
   for f in os.listdir(initdir):
-   statistics=os.stat(initdir+f.encode('utf8'))
+   f=f.decode('utf8')
+   statistics=os.stat(unicode(initdir+f).encode('utf8'))
    if S_ISDIR(statistics[0]):
     dirs.append([f.lower(),f])
    else:
@@ -92,6 +93,7 @@ class util:
     for v in value:s+=str(v)+'\x01'
    else:s=value
    self.openDB[str(key)]=str(s)
+   print '<',key,repr(s)
   def get(self, key, mode='str'):
    try:
     v=self.openDB[str(key)]

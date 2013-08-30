@@ -8,7 +8,7 @@ class loader:
   self.status=0
   self.wait=0.01
   self.ani_xy=ani_xy
-  self.img=img.resize((self.ani_xy,self.ani_xy))
+  self.img=graphics.Image.open(img).resize((self.ani_xy,self.ani_xy))
   self.gif=TopWindow()
   self.gif.size=(ani_xy, ani_xy)
   self.gif.position=self.get_mid((ani_xy,ani_xy))
