@@ -15,13 +15,13 @@ class ExtendedEditor(text):
  def change_color(self,r,g,b):
   self.t.color=self.rgb(r,g,b)
   self.t.add(u'')
- def keyword(self,word,callback):
+ def keyword(self,word,callback,*args):
   #calls callback if word found when typing
   def p(*a):
    existing=word[:-1];l=len(existing)
    if l>self.t.len():return
    before=self.t.get(self.t.get_pos()-l,l)
-   if before==existing:callback()
+   if before==existing:callback(*args)
   self.listen_keys[word[-1:]]=p
  def get_lines(self):
   return self.t.get()[:self.t.get_pos()].split(u'\u2029')
