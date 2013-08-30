@@ -16,10 +16,14 @@ from simon816 import text
 from simon816 import timer
 from simon816 import util
 from simon816.eventhandler import eventHandler
+from simon816.icon import Icon
 # aliases
 app=ui.app
 lk=e32.Ao_lock()
-u=lambda s:unicode(s)
+def u(s):
+ try:return unicode(s)
+ except:
+  return s.decode('utf8')
 util=util.util()
 fileftp=fileftp.fileftp
 global global_tabs;
@@ -40,7 +44,8 @@ class interface:
   self.appname=u"File Manager"
   self.author=u"Simon816"
   self.url=u'http://simon816.hostzi.com/pys60/ftpbrowser'
-  self.root="e:\\Python\\apps\\simon816\\ftpbrowser\\"
+  drive=os.path.splitdrive(os.getcwd())[0]
+  self.root="%s\\Python\\apps\\simon816\\ftpbrowser\\"%drive
   dirfile=self.root+"db.dir"
   if os.path.exists(dirfile):
    db_dir_f=open(dirfile,"r")
@@ -51,6 +56,9 @@ class interface:
   self.db=util.db(self.db_dir+"db.e32dbm","cf")
   try: s=self.db.get('status')
   except:self.reset()
+  self.icons=Icon()
+  self.icons.open(self.db.get('icons'))
+  self.icons.close()
   self.exit(self.quit)
 
  def ch_db_dir(self,to):
@@ -69,19 +77,20 @@ class interface:
   try:
    for entry in self.db.items():
     if entry[0].find('acc_')==-1: self.db.delete(entry[0])
-   self.db.mod('settings_dir', 'e:\\python\\apps\\simon816\\ftpbrowser')
-   self.db.mod('cache_dir', self.db.get('settings_dir')+'\\cache')
+   self.db.mod('settings_dir', self.root)
+   self.db.mod('cache_dir', self.root+'cache')
    self.db.mod('version', '0.9.0')
-   self.db.mod('defaultdir', 'e:\\')
-   self.db.mod('color', (0,0,0))
-   self.db.mod('font', (u"nokia hindi s60",14,16))
+   self.db.mod('defaultdir', self.root.split(':')[0]+':')
+   self.db.mod('text_css', {'font-family':'nokia hindi s60','font-size':14,'font-antialias':'yes','color':'#000000'})
    self.db.mod('blocksize', '8192')
-   self.db.mod('icons', "e:\\mbm.mbm")
+   self.db.mod('icons', self.root+'icons.mbm')
    self.db.mod('status', 'ready')
    self.db.mod('debug', 'False')
    self.db.mod('a', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\t')
    self.db.mod("temp_timeout",60)
    self.db.mod('ticks','0.01')
+   self.db.mod('dir_tree',False)
+   self.db.mod('file_last','')
    ui.note(u'Successfully reset', 'conf')
   except:
    ui.note(u'error', 'error')
@@ -99,7 +108,10 @@ class interface:
   ui.note(u'A FREE '+self.appname+' by '+self.author+'\nFor more info, please visit:'+self.url+'\nCurrent version: '+self.db.get('version'))
 
  def run(self):
-  util.mkdir([self.db.get('settings_dir'), self.db.get('cache_dir')])
+  util.mkdir([
+   self.db.get('settings_dir'),
+   self.db.get('cache_dir')
+  ])
   self.tabs=global_tabs
   self.tabs.tabs=[]
   self.tabs.new_tab(u'Home',self.mainscr)
@@ -113,7 +125,10 @@ class interface:
    (u'Reset', self.reset),
    (u'Exit', self.quit)]
   self.interface=[
-   u'FTP File Browser',u'Local File Browser', u'Settings', u'Setup'
+   u'FTP File Browser',
+   u'Local File Browser',
+   u'Settings',
+   u'Setup'
    ]
   app.menu=self.menu
   app.body=self.disp(self.handle)
@@ -132,20 +147,19 @@ class interface:
   c=app.body.current()
   if c==0:self.conscr()
   elif c==1:
-   def icon(pos):#temparty solution
-    return ui.Icon(u(self.db.get('icons')), pos, pos+1)
    self.exit(self.mainscr)
    self.interface=[]
    sys_drives=['C:','D:','Z:']
    for d in e32.drive_list():
-    if d in sys_drives:ico=icon(397)
-    else:ico=icon(395)
+    if d in sys_drives:ico=self.icons.get_icon(397)
+    else:ico=self.icons.get_icon(395)
     self.interface.append((u(d),ico))
    #recent places
-   self.interface.append((u"Recent Places:",icon(8)))
+   self.interface.append((u"Recent Places:",self.icons.get_icon(8)))
    recent=self.db.get("file_last","list")
    for place in recent:
-    if place:self.interface.append((u(place),icon(115)))
+    if place:self.interface.append((u(place),self.icons.get_icon(115)))
+   self.icons.close()
    app.body=self.disp(self.file)
   elif c==2:self.settings()
   elif c==3:self.setup()
@@ -297,12 +311,13 @@ class interface:
 class ftpclass:
  def __init__(self, db):
   self.db=db
+  self.icon=Icon()
+  self.icon.open(self.db.get('icons'))
+  self.icon.close()
   self.list=ui.Listbox([u''],lambda:None)
   self.event=eventHandler()
   self.connected=False
-  self.t=editor()
-  self.t.highlighter()
-  self.t.inherit_indent()
+  self.setup_editor()
  def dummy(self,*args):pass
  def exit(self, action):app.exit_key_handler=action
  def disp(self, cback,index=0):
@@ -341,7 +356,8 @@ class ftpclass:
    self.ftp.connect(self.host, int(float(opts[1])))
    self.ftp.set_pasv(pasvmode)
    self.ftp.login(self.user, i.decodestring(opts[3], self.db.get('a')))
-   self.l=loader(graphics.Image.open('e:\\Python\\apps\\simon816\\ftpbrowser\\loading.gif'),100);self.pwd=''
+   self.l=loader(self.db.get('settings_dir')+'loading.gif',100)
+   self.pwd=''
    self.l.wait=float(self.db.get('ticks'))
    if chdir:self.chdir(str(opts[4]))
    return 1
@@ -426,6 +442,7 @@ class ftpclass:
    if not dontUpdate:self.interface=self.getwd()
    t=self.tabs;s=t.selected;c=t.current
    if c()==self.name or s==0:
+    #app.body=None
     app.body=self.disp(self.actions,i)
     app.title=u(self.pwd)
    self.exit(self.disconnect)
@@ -450,6 +467,7 @@ class ftpclass:
    else:ui.note('Could not make a data connection, returning to menu', 'error');self.retry=0;self.disconnect(1)
 
  def disperr(self, e, action):
+  print e,action
   if e[:3]=='421' or tuple(e)[0]==13:
    try:self.ftp.quit()
    except:pass
@@ -478,7 +496,7 @@ class ftpclass:
   s=StringIO();
   self.cmd("retrbinary",'LIST '+dr,s.write);
   s.seek(0);li=s.read();s.close();
-  fs=[];l=[];a=li.split("\r\n");folder=ui.Icon(u(self.db.get('icons')), 115, 116);d=f=[];l.append((u'..', folder));self.amt=len(a)-1
+  fs=[];l=[];a=li.split("\r\n");folder=self.icon['folder'];d=f=[];l.append((u'..', folder));self.amt=len(a)-1
   if li:
    dirs=[];files=[]
    for I in range(0, self.amt):
@@ -491,7 +509,15 @@ class ftpclass:
     if fs[I][9]=='.' or fs[I][9]=='..':pass
     else:
      if fs[I][1][0]=="d":dirs.append((u(fs[I][9]),folder))
-     else:files.append((u(fs[I][9]),ui.Icon(u(self.db.get('icons')), 57, 58)))
+     else:
+      name=fs[I][9]
+      ext=os.path.splitext(name)[1]
+      availexts=[]
+      for k in self.icon.keys:
+       sp=k.split('.')
+       if sp[0]=='file':availexts.append('.'+sp[1])
+      if not ext in availexts:ext='.*'
+      files.append((u(name),self.icon['file'+ext]))
    I=I-1;l+=dirs+files
   if self.db.get("dir_tree","int"):
    self.tree[dr]={}
@@ -500,11 +526,16 @@ class ftpclass:
   self.fs=fs;return l
 
  def getsel(self):
+  curr=self.interface[app.body.current()][0]
   for x in range(0,self.amt):
-   if self.interface[app.body.current()][0]==self.fs[x][9]:return self.fs[x];break
+   n=self.fs[x][9]
+   if curr==u(n):
+    return self.fs[x]
   return ['-1', ['d'],'','','','','','','','..']
 
- def actions(self):
+ def actions(self,arg=None):
+  if arg is not None:
+   print arg
   self.sel=self.getsel()
   if self.sel[1][0]=="d":self.chdir(self.sel[9])
   else:self.open()
@@ -817,10 +848,33 @@ class ftpclass:
    return fh
   except all_errors, e:self.disperr(str(e), [self.retr])
 
+ def setup_editor(self):
+  self.open_file=None
+  self.t=editor()
+  self.t.bind("get_text_css",
+   lambda:eval(self.db.get('text_css')))
+  self.t.highlighter()
+  self.t.inherit_indent()
+  self.t.bind('exit',self.dispdir,[1,app.body.current()])
+  self.t.bind('save',self.save)
+  self.t.bind('saveas',self.saveas)
+  self.t.bind('error',self.text_err,[self.open_file])
+  self.t.bind("get_settings",
+   lambda:{'chunkbytes':self.db.get('blocksize')})
+  self.t.bind("set_settings",
+   lambda n:self.db.mod('blocksize',n['chunksize']))
+  self.t.bind("set_text_css",
+   lambda c:self.db.mod('text_css',c))
+
+
  def new(self):
   self.sel=self.getsel()
-  self.sel[9]=ui.query(u'New File', 'text')
-  self.open(StringIO())
+  name=name=ui.query(u'New File', 'text')
+  if not name:return
+  self.sel[9]=name
+  file=StringIO
+  self.open(file())
+  self.save(file())
 
  def text_err(self,e,f):
    if e[0]==1:
@@ -834,30 +888,17 @@ class ftpclass:
      pass
 
  def open(self,f=None,ig=False):
-  config={
-   'font':self.db.get('font', 'tuple'),
-   'color':self.db.get('color', 'tuple'),
-   'chunkbytes':self.db.get('blocksize', 'int')
-   }
-  def saveas(name,fh):
-   self.sel[9]=name
-   app.title=u(name)
-   self.save(fh)
-  def save_settings(s):
-   self.db.mod('font', s['font'])
-   self.db.mod('color',s['color'])
   if not f:f=self.retr()
-  self.t.bind('exit',self.dispdir,[1,app.body.current()])
-  self.t.bind('save',self.save)
-  self.t.bind('saveas',saveas)
-  self.t.bind('error',self.text_err,[f])
-  self.t.bind("get_settings",lambda:config)
-  self.t.bind("set_settings",save_settings)
-  self.t.bind("get_css",lambda:{})
-  self.t.bind("set_css",lambda c:None)
+  self.open_file=f
   if self.t.readFile(f,self.sel[9],ig):
    self.tabs.hide_tabs()
    app.title=u(self.sel[9])
+
+ def saveas(self,name,fh):
+  self.sel[9]=name
+  app.title=u(name)
+  self.save(fh)
+
   
  def save(self, f):
   try:
