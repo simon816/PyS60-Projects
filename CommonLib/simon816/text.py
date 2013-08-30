@@ -1,18 +1,19 @@
 import appuifw
 import StringIO
+import re
 class BinaryError(Exception):pass
-#[[chr(i), i] for i in range(0,256)]
 class text:
  def __init__(self):
   self.t=appuifw.Text()
   def make_callback(i):return lambda:self.onkey(i)
   for i in range(256):self.t.bind(i,make_callback(i))
   appuifw.app.menu=[]
-  self.bindable=['error','save','saveas','exit','get_settings','save_settings','text_properties','key']
+  self.bindable=['error','save','saveas','exit','get_settings','set_settings','get_text_css','set_text_css','key']
   self.name=""
   self.ch=None
   self.orig=""
   self.type=""
+  self.saveallowed=1
   self.menu=[
    (u'Save',self.saveFile),
    (u'Save As...',self.saveAs),
@@ -30,7 +31,7 @@ class text:
    (u'Replace',(
     (u'Text...',self.replace),
     (u'Next',self.replace_next),
-    (u'All...',lambda:self.replace(-1))
+    (u'All...',lambda:self.replace(0))
    )),
    (u'Settings',self.settings)
    ]
@@ -39,16 +40,15 @@ class text:
   self.bind('save',lambda f:None)
   self.bind('saveas',lambda n,f:None)
   self.bind('exit',lambda:None)
-  self.bind('text_properties',lambda:{})
-  self.bind("qwerty", lambda s:None)
+  self.bind('get_text_css',lambda:{})
+  self.bind('set_text_css',lambda c:None)
   self.bind("get_settings", lambda:{
-   'color':(0,0,0),
-   'font':(appuifw.available_fonts()[0],20,0),
    'chunkbytes':1024
    })
-  self.bind("save_settings", lambda s:None)
+  self.bind("set_settings", lambda s:None)
   self.bind("key", lambda i, l:None)
-  self.css({},method='plain',apply=1)
+  self.css(method='plain',apply=1)
+  self.allcss=self.css(allcss=1,method='plain')
 
  def onkey(self, i):
   if i in range(1,28):
@@ -71,8 +71,8 @@ class text:
    self.on("key", i, ['other',chr(i)])
 
  def loadText(self,t,ignore=False):
-  css=self.on("text_properties")
-  self.css(css,default=1,apply=1)
+  css=self.on("get_text_css")
+  self.css(css,method='default',apply=1)
   self.t.add(self.toUnicode(t,ignore))
   self.orig=self.getText()
   return self.t
@@ -83,8 +83,11 @@ class text:
    except UnicodeError:
     try:uni=string.decode("utf-16");self.type="utf16"
     except UnicodeError:
-     if not ignore:raise BinaryError(1,"String is in binary")
-     else:uni=string.decode("utf-8",'ignore');self.type="ignore utf8"
+     if not ignore:
+      raise BinaryError(1,"String is in binary")
+     else:
+      uni=string.decode("utf-8",'ignore')
+      self.type="ignore utf8"
   return uni
  def getText(self):
   return self.t.get().replace(u"\u2029", u'\r\n')
@@ -105,6 +108,7 @@ class text:
    newFile.close()
   return newFile
  def chunks(self,fh,n,ignore=False):
+   self.t.set(u"...")
    self.name=n
    appuifw.note(u"Split File!", "info")
    fh.seek(0)
@@ -126,6 +130,7 @@ class text:
  def chunk(self,p,ignore=False):
   self.ch[self.curr_chunk]=self.getText()
   self.curr_chunk=p
+  self.t.set(u'')
   self.loadText(self.ch[p],ignore)
   self.display()
 
@@ -144,7 +149,12 @@ class text:
   try:
    self.t.clear()
    self.name=n
-   self.loadText(fh.read(),ignore)
+   #print dir(fh)
+   text=fh.read()
+   #text=''
+   if len(text)>1024*1024:
+    raise BinaryError(2, "File larger than 1MB cannot open")
+   self.loadText(text,ignore)
    fh.close()
    self.display()
    return 1
@@ -227,7 +237,15 @@ class text:
   if not rep:return
   self.r=rep
   t=self.t.get()
-  t=t.replace(rep[0],rep[1],limit)
+  matches=[]
+  for match in re.finditer(rep[0],t):
+   matches.append(match.span())
+  if limit:matches=matches[:limit]
+  for pos in matches:
+   before=t[:pos[0]]
+   after=t[pos[1]:]
+   middle=rep[1]
+   t=before+middle+after
   self.t.set(t)
   self.r_ind=self.build_search([0],t,rep[1])
   if self.r_ind:
@@ -240,19 +258,17 @@ class text:
   appuifw.app.menu=self.menu
   appuifw.app.exit_key_handler=self.askSave
  def shutdown(self):
-  exit=self.exit;exit_args=self.exit_args
-  self.default()
+  self.t.set_pos(0)
   self.t.clear()
   self.t.set(u"Exiting, please wait...")
-  try:del self.orig,self.type
-  except:pass
-  exit(*exit_args)
-  self.default()
+  self.orig=''
+  self.type=''
+  self.on('exit')
  def saveFile(self):
   self.saveText(lambda f:self.on('save',f))
   self.orig=self.getText()
  def askSave(self):
-  if self.orig !=self.getText():
+  if self.orig !=self.getText() and self.saveallowed:
    if appuifw.query(u'Save?','query'):self.saveFile()
   self.shutdown()
  def saveAs(self):
@@ -276,27 +292,59 @@ class text:
   ]
   lb=appuifw.Listbox(options, redirect)
   appuifw.app.body=lb
+  appuifw.app.exit_key_handler=self.display
+  appuifw.app.menu=[(u'Select',redirect),(u'Close',self.display)]
  def textsettings(self):
-  current=self.css(getcss=1)
+  appuifw.app.exit_key_handler=self.settings
+  self.cssSettings(
+   self.css({},getcss=1),
+   self.savetextsettings)
+ def availcss(self,usedcss):
+  allcss=[x for x in self.allcss] # local copy
+  for k in usedcss:allcss.remove(k)
+  availcss=[unicode(l) for l in allcss]
+  select=appuifw.popup_menu(availcss,u'Available CSS Properties')
+  label=unicode(availcss[select])
+  return label,appuifw.query(u'Value','text') or u''
+
+ def cssSettings(self,css,save):
   opts=[]
-  for k in current:
-   opts.append((unicode(k),'text',unicode(current[k])))
-  f=appuifw.Form(opts,17)
-  f.menu=[(u'Add css',lambda:None)]
-  f.save_hook=self.read_form
+  for k in css:
+   opts.append((unicode(k),'text',unicode(css[k])))
+  # unusual bug where form.insert does not save current state
+  f=appuifw.Form(opts,
+     appuifw.FFormEditModeOnly
+   |appuifw.FFormDoubleSpaced)
+  def add():
+   k,v=self.availcss([str(c[0]) for c in f])
+   f.insert(len(f),(k,'text',v))
+  f.menu=[
+   (u'Add css',add),
+   (u'Delete',lambda:appuifw.note(u'To delete: remove contents of field and Save afterwards')),
+    ]
+  f.save_hook=save
   f.execute()
-  self.display()
- def read_form(self, form):
-  options=[v[2] for v in form]
+ def savetextsettings(self, form):
+  newcss={}
+  for field in form:
+   if field[2]:newcss[str(field[0])]=str(field[2])
+  text=self.css(newcss,apply=1,method='plain',text=self.t.get())
+  self.on('set_text_css',newcss)
+  self.t.set(text)
+  self.settings()
+ def advancedsettings(self):
+  current=self.on('get_settings')
+  fields=[(u'Bytes per chunk','number',current['chunkbytes'])]
+  f=appuifw.Form(fields,
+     appuifw.FFormDoubleSpaced
+   |appuifw.FFormEditModeOnly)
+  f.save_hook=self.saveadvsettings
+  f.execute()
+ def saveadvsettings(self, f):
+  settings=[str(val[2]) for val in f]
   new={}
-  new['color']=tuple([int(x) for x in options[0].split(",")])
-  new['font']=(options[1],int(options[2]),int(options[3]))
-  new['chunkbytes']=int(options[4])
-  self.on("save_settings",new)
-  self.refresh()
- def refresh(self):
-  self.style()
-  self.t.set(self.t.get())
+  new['chunkbytes']=int(settings[0])
+  self.on('set_settings',new)
 
  def rgb(self, r,g,b):
   return int("0x%d%d%d"%(r,g,b),16)
@@ -307,25 +355,28 @@ class text:
   return int('0x%s'%''.join([add0(hex(i)[2:]) for i in [r,g,b]]),16)
 
  def curr2internal(self):
-  return {'style':self.t.style,'font':list(self.t.font),'color':self.rgb2(*self.t.color),'text':'','highlight_color':self.rgb2(*self.t.highlight_color)}
+  return {'style':self.t.style,'font':list(self.t.font),'color':self.rgb2(*self.t.color),'text':self.t.get(),'highlight_color':self.rgb2(*self.t.highlight_color)}
 
  def css(self,css={},**kw):
+  inter_keys=['font','style','color','highlight_color','text']
   if not 'method' in kw:kw['method']='inherit'
   meth=kw['method']
   if meth=='plain':internal={
    'style':0,
-   'font':[None,None,16],
+   'font':[None,None,0],
    'color':0,
    'highlight_color':0,
+   'text':''
   }
-  elif meth=='default':internal=self.css(self.on('text_properties'),method='plain')
+  elif meth=='default':
+   internal=self.css(
+    self.on('get_text_css'),method='plain')
+   curr_int=self.curr2internal()
+   for k in inter_keys:
+    if not k in internal:internal[k]=curr_int[k]
   elif meth=='inherit':internal=self.curr2internal()
   else: raise AttributeError('invalid method to apply css')
   if 'text' in kw:internal['text']=kw['text']
-  inter_keys=['font','style','color','highlight_color','text']
-  current=self.curr2internal()
-  for k in inter_keys:
-   if not k in internal:internal[k]=current[k]
   def lam_if(a,o,b,t=1,f=0):
    if eval("%s%s%s"%(repr(a),o,repr(b))):return t
    else:return f
@@ -342,20 +393,20 @@ class text:
    'font-size':{'access':[0,1],'operates':'=',
     'do':lambda v:int(v),
     'undo':lambda v:str(v)},
-   'font-flags':{'access':[0,2],'operates':'|=',
-    'do':lambda v:int(v),
-    'undo':lambda v:str(v)},
+   'font-antialias':{'access':[0,2],'operates':'|=',
+    'do':lambda v:lam_if(v,'==','on',16,lam_if(v,'==','off',32)),
+    'undo':lambda v:lam_if(v&16,'>',0,'on',lam_if(v&32,'>',0,'off',''))},
    'font-style':{'access':1,'operates':'|=',
     'do':lambda v:lam_if(v,"==","italic",uifw('italic')),
-    'undo':lambda v:lam_if(v&uifw('italic'),'>','0','italic','')},
+    'undo':lambda v:lam_if(v&uifw('italic'),'>',0,'italic','')},
    'font-weight':{'access':1,'operates':'|=',
     'do':lambda v:lam_if(v,"==","bold",uifw('bold')),
-    'undo':lambda v:lam_if(v&uifw('bold'),'>','0','bold','')},
+    'undo':lambda v:lam_if(v&uifw('bold'),'>',0,'bold','')},
    'text-decoration':{'access':1,'operates':'|=','multi':1,
     'do':lambda v:
      lam_if(v,"==","underline",uifw('underline'),
       lam_if(v,"==","line-through",uifw('strikethrough'))),
-      'undo':lambda v:' '.join([lam_if(v&uifw(l[0]),'!=',0,l[1],'') for l in [['underline','underline'],['strikethrough','line-through']]])},
+      'undo':lambda v:' '.join([lam_if(v&uifw(l[0]),'>',0,l[1],'') for l in [['underline','underline'],['strikethrough','line-through']]])},
    'text-shadow':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_SHADOW]},'operates':'=',
     'do':lambda v:color2int(v),
     'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_SHADOW,'>',0,int2color(v),'')},
@@ -365,7 +416,9 @@ class text:
       " ".join([word.capitalize() for word in internal['text'].split(" ")]),
       lam_if(v,'==','lowercase',internal['text'].lower(),
        lam_if(v,'==','uppercase',internal['text'].upper(),internal['text']))),
-       'undo':lambda v:internal['text']},
+       'undo':lambda v:
+        lam_if(v,'==',v.lower(),'lowercase',
+         lam_if(v,'==',v.upper(),'uppercase',''))},
    'color':{'access':2,'operates':'=',
     'do':lambda v:color2int(v),
     'undo':lambda v:int2color(v)},
@@ -406,6 +459,8 @@ class text:
    return unicode(internal['text'])
   elif 'getcss' in kw:
    return css
+  elif 'allcss' in kw:
+   return all_properties.keys()
   else:return internal
  def internal2curr(self,internal):
   self.t.font=tuple(internal['font'])
@@ -420,3 +475,35 @@ class text:
   else:css=self.css(getcss=1)
   txt=self.css(css,apply=1,text=pack['text'])
   self.t.add(txt)
+
+"""
+import e32,StringIO
+l=e32.Ao_lock()
+t=text()
+t.bind("exit",l.signal)
+def onkey(code, rep):
+ pass#print code,rep
+t.bind("get_text_css",lambda:{
+ 'color':'#880044',
+ 'font-size':'30'
+  })
+import key_codes
+def kc(i):pass#print i,getattr(key_codes,i)
+for c in dir(key_codes):
+ if c[:1]=='E':
+  def mkcall(i):return lambda:kc(i)
+  t.t.bind(getattr(key_codes,c),mkcall(c))
+def csscall(c):
+ pass#print c
+t.bind('set_text_css',csscall)
+t.bind("key", onkey)
+def save(new):
+ print new
+t.bind('set_settings',save)
+s=StringIO.StringIO()
+s.write("Some Text")
+s.seek(0)
+t.readFile(s)
+t.display()
+l.wait()
+"""
