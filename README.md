@@ -1,0 +1,2 @@
+Here you will find Symbian applications I have made developed with Python for the Series 60.
+I have coded solely on my device using the very handy PED (Python EDitor) for S60 ([link](https://code.google.com/p/ped-s60/))
