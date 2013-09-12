@@ -115,7 +115,7 @@ class curl:
   self.add_arg('-H',2,['--header'],'Set a header')
   self.add_arg('-i',0,['--include'],'Return headers recieved')
   self.add_arg('-I',0,['--head'],'Use the HEAD verb')
-  self.add_arg('-L',0,['--location'])
+  self.add_arg('-L',0,['--location'], 'Follow Location headers when a 3XX status code is returned')
   self.add_arg('-o',2,['--output'],'Where to dump output')
   self.add_arg('-O',0,['--remote-name'])
   self.add_arg('-s',0,['--silent'])
@@ -124,6 +124,7 @@ class curl:
   self.add_arg('-v',0,['--verbose'],'Makes curl talk a lot')
   self.add_arg('-X',2,['--request'],'Set HTTP verb')
   self.add_arg('-h',0,['--help'],'Displays help')
+  self.maxredirs=50
   self.console.shell_run()
  def add_arg(self,n,rd,al=None,d=''):
   #just a quick shortcut
@@ -140,6 +141,7 @@ class curl:
   if not args:return
   self.verbose=False
   self.silent=False
+  self.redir=0
   header={'Accept':'*/*','User-Agent':'curl/7.29.0'}
   verb='GET'
   data=''
@@ -377,6 +379,30 @@ class curl:
    f.write(out)
    f.close()
   connection.close()
+  if resp.getheader('location') and '-L' in args and self.redirs < self.maxredirs:
+    self.redirs+=1
+    nproto,nhost,npath,nquery,nfrag=urlsplit(resp.getheader('location'))
+    if not nhost:
+      nhost=host
+    if not nproto:
+      nproto=proto
+    nport=port
+    if self.protocols[nproto]:
+      nport=self.protocols[nproto][0]
+    sockinfo=(nproto,nhost,nport,timeout)
+    if resp.status in [301, 302, 303]:
+      nmethod='GET'
+    else:
+      nmethod=method
+    headers={}
+    if '-e' in args:
+      spl=args['-e'].last().split(';')
+      if spl[-1]=='auto':
+        headers['Referer']=host+path
+    httpinfo=(nmethod,npath,httpver,None,headers)
+    self.download(sockinfo,httpinfo,args)
+    return
+
   if resp.will_close:
    state='closed'
   else:
