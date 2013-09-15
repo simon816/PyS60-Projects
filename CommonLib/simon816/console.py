@@ -96,7 +96,7 @@ class Console(text.text):
   self.newline()
  def newline(self):
   self.css(self.bodystyle['prompter'],method='default',apply=1)
-  self.t.add(self.toUnicode(self.lf()[:-1]))
+  self.t.add(self.toUnicode(self.lf()))
   self.css(self.bodystyle['input'],method='default',apply=1)
   self.t.add(self.toUnicode(' '))
 
@@ -144,7 +144,7 @@ class Console(text.text):
     after.append(hide)
   elif key==13: #enter pressed
    self.t.set_pos(self.t.len())
-   lfl=len(self.lf())
+   lfl=len(self.lf())+1 # +1 for added space
    if line[-1:]=='\\':
     after.append(lambda:self.t.add(u' '*lfl))
    else:
