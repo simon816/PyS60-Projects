@@ -161,7 +161,7 @@ class curl:
    else:
     print 'Please specify a url'
     return
-  proto,host,path,query,frag=urlsplit(args['--url'][-1])
+  proto,host,path,query,frag=urlsplit(args['--url'].last())
   try:
    host,port=host.split(':')
    port=int(port)
@@ -252,6 +252,9 @@ class curl:
     f.close()
    header['Content-Length']=str(len(data))
 
+  if '-e' in args:
+    header['Referer']=args['-e'].last()
+
   if '-H' in args:
    for h in args['-H'].Values():
     try:
@@ -278,6 +281,7 @@ class curl:
    print sockinfo
    print httpinfo
    print args
+   print argstat
   self.download(sockinfo,httpinfo,args)
 
  def if_v(self,words):
