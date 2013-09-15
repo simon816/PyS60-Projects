@@ -424,7 +424,10 @@ class text:
     'undo':lambda v:int2color(v)},
    'background':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_STANDARD]},'operates':'=',
     'do':lambda v:color2int(v),
-    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_STANDARD,'>',0,int2color(v),'')}
+    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_STANDARD,'>',0,int2color(v),'')},
+   'background-curve':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_ROUNDED]},'operates':'=',
+    'do':lambda v:color2int(v),
+    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_ROUNDED,'>',0,int2color(v),'')}
   }
   im=inter_keys
   for prop,opts in all_properties.iteritems():
@@ -476,34 +479,22 @@ class text:
   txt=self.css(css,apply=1,text=pack['text'])
   self.t.add(txt)
 
-"""
-import e32,StringIO
-l=e32.Ao_lock()
-t=text()
-t.bind("exit",l.signal)
-def onkey(code, rep):
- pass#print code,rep
-t.bind("get_text_css",lambda:{
- 'color':'#880044',
- 'font-size':'30'
+if __name__ == '__main__':
+  import e32,StringIO
+  l=e32.Ao_lock()
+  t=text()
+  t.bind("exit",l.signal)
+  t.saveallowed=False
+  t.bind("get_text_css",lambda:{
+    'color':'#880044',
+    'font-size':'30'
   })
-import key_codes
-def kc(i):pass#print i,getattr(key_codes,i)
-for c in dir(key_codes):
- if c[:1]=='E':
-  def mkcall(i):return lambda:kc(i)
-  t.t.bind(getattr(key_codes,c),mkcall(c))
-def csscall(c):
- pass#print c
-t.bind('set_text_css',csscall)
-t.bind("key", onkey)
-def save(new):
- print new
-t.bind('set_settings',save)
-s=StringIO.StringIO()
-s.write("Some Text")
-s.seek(0)
-t.readFile(s)
-t.display()
-l.wait()
-"""
+  def save(new):
+    print new
+  t.bind('set_settings',save)
+  s=StringIO.StringIO()
+  s.write("Some Text")
+  s.seek(0)
+  t.readFile(s)
+  t.display()
+  l.wait()
