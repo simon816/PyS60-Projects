@@ -97,6 +97,8 @@ class ArgumentParser:
     raise AttributeError('Argument %r must have an attribute'%action[2])
   if not keys['UNKNOWN']:
    del keys['UNKNOWN']
+  else:
+    keys['UNKNOWN']=ParsedArgument('UNKNOWN',keys['UNKNOWN'])
   return keys,stats
 
  def getArgument(self,name):
