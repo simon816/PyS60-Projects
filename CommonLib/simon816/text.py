@@ -388,46 +388,46 @@ class text:
   uifw=lambda v:getattr(appuifw,"STYLE_"+v.upper())
   all_properties={
    'font-family':{'access':[0,0],'operates':'=',
-    'do':lambda v:unicode(v),
-    'undo':lambda v:str(v)},
+    'apply':lambda v:unicode(v),
+    'remove':lambda v:str(v)},
    'font-size':{'access':[0,1],'operates':'=',
-    'do':lambda v:int(v),
-    'undo':lambda v:str(v)},
+    'apply':lambda v:int(v),
+    'remove':lambda v:str(v)},
    'font-antialias':{'access':[0,2],'operates':'|=',
-    'do':lambda v:lam_if(v,'==','on',16,lam_if(v,'==','off',32)),
-    'undo':lambda v:lam_if(v&16,'>',0,'on',lam_if(v&32,'>',0,'off',''))},
+    'apply':lambda v:lam_if(v,'==','on',16,lam_if(v,'==','off',32)),
+    'remove':lambda v:lam_if(v&16,'>',0,'on',lam_if(v&32,'>',0,'off',''))},
    'font-style':{'access':1,'operates':'|=',
-    'do':lambda v:lam_if(v,"==","italic",uifw('italic')),
-    'undo':lambda v:lam_if(v&uifw('italic'),'>',0,'italic','')},
+    'apply':lambda v:lam_if(v,"==","italic",uifw('italic')),
+    'remove':lambda v:lam_if(v&uifw('italic'),'>',0,'italic','')},
    'font-weight':{'access':1,'operates':'|=',
-    'do':lambda v:lam_if(v,"==","bold",uifw('bold')),
-    'undo':lambda v:lam_if(v&uifw('bold'),'>',0,'bold','')},
+    'apply':lambda v:lam_if(v,"==","bold",uifw('bold')),
+    'remove':lambda v:lam_if(v&uifw('bold'),'>',0,'bold','')},
    'text-decoration':{'access':1,'operates':'|=','multi':1,
-    'do':lambda v:
+    'apply':lambda v:
      lam_if(v,"==","underline",uifw('underline'),
       lam_if(v,"==","line-through",uifw('strikethrough'))),
-      'undo':lambda v:' '.join([lam_if(v&uifw(l[0]),'>',0,l[1],'') for l in [['underline','underline'],['strikethrough','line-through']]])},
+      'remove':lambda v:' '.join([lam_if(v&uifw(l[0]),'>',0,l[1],'') for l in [['underline','underline'],['strikethrough','line-through']]])},
    'text-shadow':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_SHADOW]},'operates':'=',
-    'do':lambda v:color2int(v),
-    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_SHADOW,'>',0,int2color(v),'')},
+    'apply':lambda v:color2int(v),
+    'remove':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_SHADOW,'>',0,int2color(v),'')},
    'text-transform':{'access':4,'operates':'=',
-    'do':lambda v:
+    'apply':lambda v:
      lam_if(v,"==",'capitalize',
       " ".join([word.capitalize() for word in internal['text'].split(" ")]),
       lam_if(v,'==','lowercase',internal['text'].lower(),
        lam_if(v,'==','uppercase',internal['text'].upper(),internal['text']))),
-       'undo':lambda v:
+       'remove':lambda v:
         lam_if(v,'==',v.lower(),'lowercase',
          lam_if(v,'==',v.upper(),'uppercase',''))},
    'color':{'access':2,'operates':'=',
-    'do':lambda v:color2int(v),
-    'undo':lambda v:int2color(v)},
+    'apply':lambda v:color2int(v),
+    'remove':lambda v:int2color(v)},
    'background':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_STANDARD]},'operates':'=',
-    'do':lambda v:color2int(v),
-    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_STANDARD,'>',0,int2color(v),'')},
+    'apply':lambda v:color2int(v),
+    'remove':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_STANDARD,'>',0,int2color(v),'')},
    'background-curve':{'access':{'p':3,1:["|=",lambda:appuifw.HIGHLIGHT_ROUNDED]},'operates':'=',
-    'do':lambda v:color2int(v),
-    'undo':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_ROUNDED,'>',0,int2color(v),'')}
+    'apply':lambda v:color2int(v),
+    'remove':lambda v:lam_if(internal['style']&appuifw.HIGHLIGHT_ROUNDED,'>',0,int2color(v),'')}
   }
   im=inter_keys
   for prop,opts in all_properties.iteritems():
@@ -449,13 +449,13 @@ class text:
     cmd+="internal['%s']%s%s"%(p_ac,s_ac,opts['operates'])
     if 'multi' in opts:
      for value in css[prop].split(" "):
-      res=repr(opts['do'](value))
+      res=repr(opts['apply'](value))
       exec cmd+res in locals()
     else:
-     res=repr(opts['do'](css[prop]))
+     res=repr(opts['apply'](css[prop]))
      exec cmd+res in locals()
    elif 'getcss' in kw:
-    res=eval("opts['undo'](internal['%s']%s)"%(p_ac,s_ac))
+    res=eval("opts['remove'](internal['%s']%s)"%(p_ac,s_ac))
     if res.strip():css[prop]=res
   if 'apply' in kw:
    self.internal2curr(internal)
