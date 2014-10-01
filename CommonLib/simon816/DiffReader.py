@@ -128,6 +128,11 @@ class DifferenceReader:
   def onclick(code,prop):
    if prop[1]=='+':
      pass #zoom in
+     t.t.clear()
+     css=t.css(getcss=1)
+     css['font-size']=str(int(css['font-size'])+1)
+     t.css(css,apply=1,method='plain')
+     self.textAddDiffObj(self.dfoj)
    elif prop[1]=='-':
     pass #zoom out
    pos=t.t.get_pos()
@@ -154,6 +159,7 @@ class DifferenceReader:
   lock.wait()
 
  def textAddDiffObj(self,diffs):
+  self.dfoj=diffs
   for diffobj in diffs:
    coord=diffobj.get_coord_str()
    if not coord.endswith('\n'):
@@ -251,11 +257,8 @@ class patch_obj:
    except IndexError:raise StopIteration
 
 if __name__=='__main__':
-  f=open('E:\\commit.diff')
-  diff=f.read()
-  f.close()
   dr=DifferenceReader()
   dr.changeSetting('lineno',2)
-  dr.displayDifference(diff)
+  dr.displayDifference('@@ -1 +1 @@\n+ Hello')
   #files=dr.parseMultiDifference(diff)
   #dr.displayDifference('\n'.join(files[4]['lines']))

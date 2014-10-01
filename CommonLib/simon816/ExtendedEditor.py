@@ -72,7 +72,10 @@ if __name__=='__main__':
   import e32
   l=e32.Ao_lock()
   e.bind('exit',l.signal)
-  e.loadText('<html>\n<head>\n</head>\n<body>\n</body>\n</html>')
+  def k(t):
+    ao_sleep(0,lambda:e.t.add(unicode(t+' ')))
+  e.keyword('welcome',lambda:k(' to this test tool'))
+  e.loadText('')
   e.inherit_indent()
   e.display()
   l.wait()

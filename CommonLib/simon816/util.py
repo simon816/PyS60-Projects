@@ -4,8 +4,7 @@ import appuifw
 import e32
 from stat import *
 
-class util:
- def select(self,type="file",initdir="\\",drive="",**options):
+def select(type="file",initdir="\\",drive="",**options):
   def opt(k):
    if k in options:return options[k]
   initdir=drive+initdir
@@ -57,16 +56,18 @@ class util:
    if dirsonly and selected[4:]=="[This Directory]":
     return initdir+selected[4:]
    else:
-    return self.select(type,initdir+selected[4:]+"\\",'',**options)
+    return select(type,initdir+selected[4:]+"\\",'',**options)
   elif selected==u"[This Directory]":
    return  initdir
   else:
    return initdir+selected[4:]
- def mkdir(self,list):
+
+def mkdir(list):
   for dir in list:
    if not os.path.exists(dir):
     os.makedirs(dir)
- class db:
+
+class db:
   def __init__(self,file="",mode=None):
    if file and mode:
     self.open(file,mode)
@@ -112,7 +113,8 @@ class util:
    except:raise
   def delete(self,key):
    del self.openDB[key]
- def submenu(self, mode='r', *args):
+
+def submenu(mode='r', *args):
   subindex=args[0]
   if mode=="c":
    appuifw.app.menu[subindex]=(args[1],tuple(args[2:]))

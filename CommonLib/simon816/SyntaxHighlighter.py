@@ -123,7 +123,7 @@ class SyntaxHighlighter(ExtendedEditor):
     'function':self.open_php
    },
    'Javascript':{
-    'file_types':[".js"],
+    'file_types':[".js", '.java'],
     'css':{
      'plaintext':{},
      'symbol':{'color':'#FF0000'},
