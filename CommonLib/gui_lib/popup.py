@@ -1,4 +1,7 @@
-import appuifw
+try:
+    import appuifw2 as appuifw
+except ImportError:
+    import appuifw
 
 #__all__ = ['Popup']
 
@@ -32,10 +35,12 @@ class Popup:
         return appuifw.query(unicode(label), 'query')
     confirm = staticmethod(confirm)
 
-    def menu(self, items, label=u''):
+    def menu(items, label=u''):
         return appuifw.popup_menu(map(unicode, items), unicode(label))
+    menu = staticmethod(menu)
 
-    def menu2(self, items, label=u''):
+    def menu2(items, label=u''):
         return appuifw.popup_menu(map(lambda item:
                                       (unicode(item[0]), unicode(item[1])), items),
                                   unicode(label))
+    menu2 = staticmethod(menu2)

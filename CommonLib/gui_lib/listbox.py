@@ -23,6 +23,7 @@ class Listbox(ManagedProperty, BodyElement):
         self.type = list_type
         self.__list = []
         self._default_calback = None
+        self._selected = None
 
     def add_item(self, arg0, arg1=None, arg2=None, arg3=None):
         """
@@ -77,20 +78,32 @@ class Listbox(ManagedProperty, BodyElement):
         self.__list.append({'callback': callback, 'value': value})
         self.event_bus.post('list_update')
 
+    def clear(self):
+        while len(self.__list):
+            self.__list.pop()
+
     def draw(self):
-        items = map(lambda item: item['value'], self.__list)
-        listbox = appuifw.Listbox(items, lambda: self.__handle(listbox))
-        self.event_bus.subscribe('list_update', lambda: listbox.set_list(self.__list, listbox.current()))
-        self.event_bus.subscribe('set_selected', lambda index: listbox.set_list(self.__list, index))
+        get_items = lambda: map(lambda item: item['value'], self.__list)
+        listbox = appuifw.Listbox(get_items(), lambda: self.__handle(listbox))
+        self.event_bus.subscribe('list_update', lambda: listbox.set_list(get_items(), listbox.current()))
+        self.event_bus.subscribe('set_selected', lambda index: listbox.set_list(get_items(), index))
+        self.event_bus.subscribe('get_selected', lambda: setattr(self, '_selected', listbox.current()))
         self._super_draw(listbox)
+        self.event_bus.post('set_selected', self._selected)
 
     def erase(self):
         self.event_bus._unsub_all('list_update')
         self.event_bus._unsub_all('set_selected')
+        self.event_bus._unsub_all('get_selected')
+        print 's', self._selected
+        #self._selected = None
 
-    def get_selected(self):
-        raise NotImplementedError()
-        #self.event_bus.post('get_selected')
+    def get_value_at(self, index):
+        return self.__list[index]
+
+    def get_selected_index(self):
+        self.event_bus.post('get_selected')
+        return self._selected
 
     def set_selected(self, index):
         if type(index) is not int or index < 0 or index >= len(self.__list):
@@ -103,7 +116,7 @@ class Listbox(ManagedProperty, BodyElement):
         self._default_calback = callback
 
     def __handle(self, listbox):
-        current = listbox.current()
+        current = self._selected = listbox.current()
         item = self.__list[current]
         if item['callback']:
             item['callback']()

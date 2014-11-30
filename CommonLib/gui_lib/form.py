@@ -91,6 +91,7 @@ class ChoiceGroup(FormItem):
     def from_tuple(self, data):
         super(ChoiceGroup, self).from_tuple(data)
         self.elements, self.selected = data[2]
+        self.selected = int(self.selected)
 
 
 
@@ -102,6 +103,7 @@ class DateField(FormItem):
     def __init__(self, label, mode):
         super(DateField, self).__init__(label)
         self.set_input_mode(mode)
+        self.set_date(0)
 
     def get_date(self):
         return self.get_value()
@@ -115,7 +117,7 @@ class DateField(FormItem):
             # date must be less than 1 day from 0 epoch
       #  elif self.mode == self.DATE:
             # Ignore time value
-        self.value = date
+        self.value = float(date)
         self.event_bus_post('set')
 
     def set_input_mode(self, mode):
@@ -192,10 +194,11 @@ class TextField(FormItem):
 
 class Form(Screen):
 
-    class SaveEvent(object):
+    class SaveEvent(ManagedProperty):
 
-        def __init__(self, form_data):
-            self.data = form_data
+        def init(self, form):
+            #self.data = form_data   # TODO some sort
+            self.form = form        # of wrapper
             self.__cancelled = False
 
         def cancel(self):
@@ -203,6 +206,9 @@ class Form(Screen):
 
         def is_cancelled(self):
             return self.__cancelled
+
+        data = property(ManagedProperty.get_attr('data'), ManagedProperty.set_attr('data'))
+        form = property(ManagedProperty.get_attr('form'), ManagedProperty.set_attr('form'))
 
     class FormMenu(MenuElement):
 
@@ -262,15 +268,15 @@ class Form(Screen):
 
     def set_editable(self, editable):
         self.editable = not not editable
-        # TODO __form_listener ?
+        # TODO __event_bus ?
 
     def set_edit_labels(self, edit_labels):
         self.edit_labels = not not edit_labels
-        # TODO __form_listener ?
+        # TODO __event_bus ?
 
     def set_double_spaced(self, double_space):
         self.double_spaced = not not double_space
-        # TODO __form_listener ?
+        # TODO __event_bus ?
 
     def draw(self):
         items = map(lambda item: item.to_tuple(), self.items)
@@ -286,14 +292,20 @@ class Form(Screen):
             flags += appuifw.FFormDoubleSpaced
 
         form = appuifw.Form(items, flags)
+        self.menu.event_bus.subscribe('draw', lambda: self.menu.draw(form))
         self.menu.draw(form)
 
         def try_to_save(form_data):
-            event = self.SaveEvent(form_data)
+            for i in range(len(form_data)):
+                self.items[i].event_bus.unsubscribe('*', on_item_bus_post)
+                self.items[i].from_tuple(form_data[i])
+            event = self.SaveEvent(self)
             self.save.trigger(event)
+            map(lambda item: item.event_bus.subscribe('*', on_item_bus_post), self.items)
             return not event.is_cancelled()
 
         form.save_hook = try_to_save
+        self.title.event_bus.subscribe('draw', self.title.draw)
         self.title.draw()
 
         def on_item_bus_post(key, item, *args, **kwargs):
@@ -326,6 +338,12 @@ class Form(Screen):
 
         map(lambda event_bus: event_bus.unsubscribe('*', on_item_bus_post), buses)
         self.exit.trigger()
+
+    def remove(self):
+        self.title.event_bus.unsubscribe('draw', self.title.draw)
+        self.title.erase()
+        self.menu.event_bus._unsub_all('draw')
+        self.menu.erase()
 
     save = property(ManagedProperty.get_attr('save'), ManagedProperty.set_attr('save'))
     body = property(ManagedProperty.get_attr('body'), ManagedProperty.set_attr('body'))

@@ -1,4 +1,7 @@
-import appuifw
+try:
+    import appuifw2 as appuifw
+except ImportError:
+    import appuifw
 import e32
 
 class Listenable(object):
@@ -107,7 +110,7 @@ class Screen(ManagedProperty):
             element.draw()
 
     def remove(self):
-        __is_drawing = False
+        self.__is_drawing = False
         for element in [self.title, self.body, self.menu, self.exit]:
             element.event_bus.unsubscribe('draw', element.draw)
             element.erase()
@@ -185,6 +188,7 @@ class WindowManager:
     def show(self, screen):
         if not isinstance(screen, Screen):
             raise TypeError("Cannot show non-screen types")
+        self.current_screen.remove()
         self.current_screen = screen
         self.draw()
 
@@ -201,7 +205,6 @@ class WindowManager:
         return self.current_screen == screen
 
     def mainloop(self):
-        self.show(self.root_screen)
         self.__lock.wait()
 
 
