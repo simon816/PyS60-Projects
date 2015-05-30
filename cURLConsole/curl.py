@@ -89,8 +89,11 @@ class curl:
   self.console.bodystyle['input']={'color':'#117711'}
   self.console.bodystyle['output']={'color':'#000088'}
   self.console.bind('exec_cmd',self.command)
-  self.console.bind('get_text_css',lambda:
-   {'font-antialias':'on','font-size':'15'}
+  def p(a,r):
+      #self.console.oldstd['out'].write(repr(a) + '\n')
+      return r
+  self.console.bind('get_text_css',lambda a=None:
+   p(a,{'font-antialias':'on','font-size':'15'})
   )
   self.UserPassStore={}
   self.protocols={
@@ -124,8 +127,9 @@ class curl:
   self.add_arg('-v',0,['--verbose'],'Makes curl talk a lot')
   self.add_arg('-X',2,['--request'],'Set HTTP verb')
   self.add_arg('-h',0,['--help'],'Displays help')
-  self.maxredirs=50
-  self.console.shell_run()
+  self.maxredirs=10
+  self.redirs = 0
+  self.console.shell_run('http://google.com')
  def add_arg(self,n,rd,al=None,d=''):
   #just a quick shortcut
   a=self.argParser.createArgument(name=n,requiresdata=rd,description=d)
@@ -225,8 +229,11 @@ class curl:
     userpass=parsestr(user)
     if host in self.UserPassStore:action='replace'
     else:action='save'
-    saveuser=raw_input('%s username and password for %s? [y/n]'%(action,host))
-    if saveuser.lower()=='y':
+    try:
+      saveuser=raw_input('%s username and password for %s? [y/n]'%(action,host)).lower()=='y'
+    except EOFError:
+      saveuser=False
+    if saveuser:
      self.UserPassStore[host]=userpass
    header['Authorization']='Basic '+userpass
 
