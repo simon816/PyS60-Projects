@@ -7,6 +7,7 @@ import ftplib
 import zipfile
 import graphics
 import sys
+
 from simon816 import encypher
 from simon816.SyntaxHighlighter import SyntaxHighlighter
 from simon816 import fileftp
@@ -17,14 +18,14 @@ from simon816 import timer
 from simon816 import util
 from simon816.eventhandler import eventHandler
 from simon816.icon import Icon
+from simon816 import interface
+
 # aliases
 app=ui.app
-lk=e32.Ao_lock()
 def u(s):
  try:return unicode(s)
  except:
   return s.decode('utf8')
-util=util.util()
 fileftp=fileftp.fileftp
 global global_tabs;
 global_tabs=tabs()
@@ -39,36 +40,233 @@ all_errors=ftplib.all_errors
 error_reply=ftplib.error_reply
 error_perm=ftplib.error_perm
 
-class interface:
+class FileHandler:
+    def __init__(self, *args):
+        raise TypeError("class FileHandler must be subclassed")
+    def get_file(self, filename):
+        pass
+    def put_file(self, filename, contents):
+        pass
+    def rename_file(self, filename, newname):
+        pass
+    def delete_file(self, filename):
+        pass
+    def move_file(self, filename, newname):
+        pass
+    def copy_file(self, filename, copyname):
+        pass
+    def file_info(self, filename):
+        pass
+    def list_dir(self, dirname=None):
+        pass
+    def ch_dir(self, dirname):
+        pass
+    def rename_dir(self, dirname, newname):
+        pass
+    def delete_dir(self, dirname):
+        pass
+    def move_dir(self, dirname, newdir):
+        pass
+    def copy_dir(self, dirname, copydir):
+        pass
+
+class Browser:
+    def __init__(self, db):
+        raise TypeError("class Browser must be subclassed")
+    def get_name(self):
+        return ''
+    def set_screen(self):
+        pass
+
+class FTPBrowser(Browser):
+    def __init__(self, db):
+        self.connections = []
+        self.db = db
+        self.menu = [
+            (u'Connect', lambda: self.connect(choices[app.body.current()])),
+            (u'New', lambda: self.new_connection(self.get_selected())),
+            (u'Edit', lambda: self.edit_connection(self.get_selected())),
+            (u'Delete', lambda: self.delete_connection(self.get_selected())),
+            (u'Export...', lambda: self.export(self.get_selected())),
+            (u'Import', self._import)]
+
+    def get_name(self):
+        return 'FTP File Browser'
+    def form(self, args):
+        return [(u'Connection Name', 'text', args[0]),
+            (u"Host", 'text', args[1]),
+            (u"Port", 'number', args[2]),
+            (u"Username", 'text', args[3]),
+            (u"Password", 'text', args[4]),
+            (u"Initial Directory", 'text', args[5]),
+            (u"Passive Mode", 'combo',
+                ([u"True", u"False"], args[6]))]
+
+    def new_connection(self):
+        f = self.form([u"", u"", 21, u"", u"", u"/", 0])
+        f = ui.Form(f, 17)
+        f.execute()
+        self.save_connection(f, 'true')
+
+    def edit_connection(self, name):
+        data = self.db.get('acc_' + name, 'list')
+        form = self.form([
+            u(name),
+            u(data[0]),
+            int(float(data[1])),
+            u(data[2]),
+            u(i.decodestring(data[3], self.db.get('a'))),
+            u(data[4]),
+            int(data[5])])
+        f = ui.Form(form, 17)
+        f.save_hook = self.save_connection
+        f.execute()
+
+    def save_connection(self, f, dele=0):
+        if f[0][2] == u"" or f[1][2] == u"":
+            iface.error('Not enough data provided')
+            return
+        account = []
+        for opt in f:
+            account.append(opt[2])
+            if opt[0] == "Password":
+                account[-1] = i.encodestring(opt[2], self.db.get('a'))
+            elif opt[0] == "Passive Mode":
+                account[-1] = opt[2][1]
+        del account[0]
+        self.db.mod('acc_' + f[0][2], account)
+        if dele: self.delete_connection(f[0][2], 1)
+        iface.success('Saved')
+        self.set_screen()
+
+    def delete_connection(self, name, ok=0):
+        if not ok:
+            ok = iface.confirm(u"Are you sure you want to delete %r?" % name)
+        if ok == 1:
+            self.db.delete('acc_' + name)
+            self.connections.pop(app.body.current())
+        self.set_screen()
+
+    def export(self, name):
+        dir = util.select('dir', self.db.get("defaultdir"))
+        if dir:
+            f = open(dir + name + ".acc", 'w')
+            f.write("\n".join(self.db.get('acc_' + name, 'list')))
+            f.close()
+            iface.success("Successfully exported as '%s.acc'" % name)
+ 
+    def _import(self):
+        acc = util.select('file', self.db.get("defaultdir"),extwhitelist=['acc'])
+        if not acc: return
+        name = os.path.splitext(os.path.split(acc)[1])[0]
+        f=open(acc)
+        d=f.read()
+        f.close()
+        self.db.mod('acc_' + name, d.split("\n"))
+        self.set_screen()
+
+    def connect(self, name):
+        opts = self.db.get('acc_' + name, 'list')
+        ftp = ftpclass(self.db)
+        ftp.connect(name, opts)
+
+    def get_selected(self):
+        return self.screen.listbox._data[0][self.screen.body.current()]
+
+    def set_screen(self):
+        choices = [(u'[New Connection]', self.new_connection)]
+        accounts = []
+        for item in self.db.items():
+            if not item[0].find('acc_') == -1:
+                accounts.append(u(item[0][4:]))
+        accounts.sort(lambda x, y: cmp(x.lower(),y.lower()))
+        choices += accounts
+        self.screen = iface.create_screen(exit=iface.close_current,
+            body=iface.listbox(choices, self.connect),
+            menu=self.menu,
+            title='Connect to...')
+        iface.set_screen(self.screen)
+
+class FileBrowser(Browser):
+    def __init__(self, db):
+        self.db = db
+        self.drives = self.list_drives()
+
+    def get_name(self):
+        return "Local File Browser"
+
+    def list_drives(self):
+        drives = []
+        sys_drives = ['C:', 'D:', 'Z:']
+        for drive in e32.drive_list():
+            if drive in sys_drives:
+                drives.append((drive, True))
+            else:
+                drives.append((drive, False))
+        return drives
+
+    def set_screen(self):
+        icons=Icon()
+        icons.open(self.db.get('icons'))
+        choices = []
+        for drive in self.drives:
+            if drive[1]:
+                icon = icons.get_icon(397)
+            else:
+                icon = icons.get_icon(395)
+            choices.append( (u(drive[0]), icon) )
+
+        choices.append((u"Recent Places:", icons.get_icon(8), lambda: None))
+        recent = self.db.get('file_last', 'list')
+        for place in recent:
+            if place:
+                choices.append((u(place), icons.get_icon(115)))
+
+        icons.close()
+        scr_local = iface.create_screen(exit=iface.close_current,
+            body=iface.listbox(choices, self.open_session),
+           title='Select Drive...')
+        iface.set_screen(scr_local)
+
+    def open_session(self, entry, drive=None, inidir=""):
+        item = entry[0]
+        if drive: item = drive
+        if item in e32.drive_list():
+            drive = item[:1]
+            ftpclass(self.db).connect(
+                'File Browser > ' + drive, ['LocalUser', '21', drive, '1a', inidir, 1], fileftp)
+        else:
+            self.open_session(item, *os.path.splitdrive(item))
+
+iface = interface.get_interface()
+
+class GUI:
  def __init__(self):
-  self.appname=u"File Manager"
-  self.author=u"Simon816"
-  self.url=u'http://simon816.hostzi.com/pys60/ftpbrowser'
-  drive=os.path.splitdrive(os.getcwd())[0]
-  self.root="%s\\Python\\apps\\simon816\\ftpbrowser\\"%drive
-  dirfile=self.root+"db.dir"
-  if os.path.exists(dirfile):
-   db_dir_f=open(dirfile,"r")
-   self.db_dir=db_dir_f.read()
-   db_dir_f.close()
-  else:
-   self.ch_db_dir(self.root)
-  self.db=util.db(self.db_dir+"db.e32dbm","cf")
-  try: s=self.db.get('status')
-  except:self.reset()
-  self.icons=Icon()
-  self.icons.open(self.db.get('icons'))
-  self.icons.close()
-  self.exit(self.quit)
+        self.appname = "File Manager"
+        self.author = "Simon816"
+        self.url = "http://simon816.hostzi.com/dev/pys60/ftpbrowser"
+        drive = os.path.splitdrive(os.getcwd())[0]
+        self.root = drive + "\\Python\\apps\\simon816\\ftpbrowser\\"
+        dirfile=self.root+"db.dir"
+        if os.path.exists(dirfile):
+            db_dir_f=open(dirfile,"r")
+            self.db_dir=db_dir_f.read()
+            db_dir_f.close()
+        else:
+            self.ch_db_dir(self.root)
+        self.db=util.db(self.db_dir+"db.e32dbm","cf")
+        try: s=self.db.get('status')
+        except:self.reset()
+        self.icons=Icon()
+        self.icons.open(self.db.get('icons'))
+        self.icons.close()
+        self.exit(self.quit)
 
  def ch_db_dir(self,to):
   db_dir_f=open(self.root+"db.dir","w")
   db_dir_f.write(to)
   db_dir_f.close()
   self.db_dir=to
-
- def form(self, args):
-  return [(u'Connection Name', 'text', args[0]), (u'Host', 'text',args[1]),(u'Port', 'number', args[2]), (u'Username', 'text', args[3]), (u'Password', 'text', args[4]), (u'Initial Directory', 'text', args[5]), (u'Passive Mode', 'combo', ([u'True', u'False'], args[6]))]
 
  def decodestring(self,s,a):return encypher.decode(str(s[int(float(s[:1]))+1:]),int(float(a.find(s[1:2])+1)),self.db.get('a'))
  def encodestring(self,s, a):K=random.randint(1,len(a)-1);k=encypher.encode(str(K), K,self.db.get('a'),'', 'a');return  encypher.encode(s, K,self.db.get('a'), str(len(k))+k)
@@ -91,15 +289,21 @@ class interface:
    self.db.mod('ticks','0.01')
    self.db.mod('dir_tree',False)
    self.db.mod('file_last','')
-   ui.note(u'Successfully reset', 'conf')
+   iface.success('Successfully reset')
   except:
-   ui.note(u'error', 'error')
+   iface.error('error')
 
- def quit(self):
-  try:self.db.sync();self.db.close();
-  except:print sys.exc_info()
-  lk.signal();self.tabs.hide_tabs()
-  self.exit(sys.exit)
+ def quit(self, unlock):
+        try:
+            self.db.sync()
+            self.db.close()
+        except Exception, e:
+            import traceback
+            print ''.join(traceback.format_tb(sys.exc_info()[2]))
+            print str(e)
+        self.tabs.hide_tabs()
+        unlock()
+        #self.exit(sys.exit)
  def exit(self, action):app.exit_key_handler=action
  def disp(self, cback):return ui.Listbox(self.interface, cback)
  def dummy(self):pass
@@ -108,205 +312,83 @@ class interface:
   ui.note(u'A FREE '+self.appname+' by '+self.author+'\nFor more info, please visit:'+self.url+'\nCurrent version: '+self.db.get('version'))
 
  def run(self):
-  util.mkdir([
-   self.db.get('settings_dir'),
-   self.db.get('cache_dir')
-  ])
-  self.tabs=global_tabs
-  self.tabs.tabs=[]
-  self.tabs.new_tab(u'Home',self.mainscr)
-  self.mainscr()
+        util.mkdir([self.db.get('settings_dir'),
+            self.db.get('cache_dir')])
+        self.tabs = global_tabs
+        self.tabs.tabs = []
+        self.tabs.new_tab(u"Home", self.mainscr)
+        self.browsers = [FTPBrowser(self.db), FileBrowser(self.db)]
+        def quit():
+            e = iface.current('exit')
+            return lambda: self.quit(e)
+        items = [(u(b.get_name()), b.set_screen) for b in self.browsers]
+        items.extend([(u"Settings", self.settings),
+            (u"Setup", self.setup)])
+        self.scr_main_menu = iface.create_screen(
+            exit=quit(),
+            menu=[
+                (u"About", self.about),
+                (u"Reset", self.reset),
+                (u"Exit", quit)],
+            body=iface.listbox(items),
+            title=self.appname)
+        self.mainscr()
 
  def mainscr(self):
-  self.exit(self.quit)
-  self.menu=[
-   (u'Select', self.handle),
-   (u'About', self.about),
-   (u'Reset', self.reset),
-   (u'Exit', self.quit)]
-  self.interface=[
-   u'FTP File Browser',
-   u'Local File Browser',
-   u'Settings',
-   u'Setup'
-   ]
-  app.menu=self.menu
-  app.body=self.disp(self.handle)
-  app.title=self.appname
+  iface.set_screen(self.scr_main_menu)
 
-
- def activate(self):
-  c=app.body.current()
-  if c==0:self.newcon()
-  else:
-   name=self.connections[c]
-   opts=self.db.get('acc_'+name, 'list')
-   ftp=ftpclass(self.db)
-   ftp.connect(name,opts)
- def handle(self):
-  c=app.body.current()
-  if c==0:self.conscr()
-  elif c==1:
-   self.exit(self.mainscr)
-   self.interface=[]
-   sys_drives=['C:','D:','Z:']
-   for d in e32.drive_list():
-    if d in sys_drives:ico=self.icons.get_icon(397)
-    else:ico=self.icons.get_icon(395)
-    self.interface.append((u(d),ico))
-   #recent places
-   self.interface.append((u"Recent Places:",self.icons.get_icon(8)))
-   recent=self.db.get("file_last","list")
-   for place in recent:
-    if place:self.interface.append((u(place),self.icons.get_icon(115)))
-   self.icons.close()
-   app.body=self.disp(self.file)
-  elif c==2:self.settings()
-  elif c==3:self.setup()
-  else:pass
-
- def file(self, drive=None,inidir=""):
-  sel=self.interface[app.body.current()][0]
-  if drive:sel=drive
-  if sel in e32.drive_list():
-   drive=sel[:1]
-   ftpclass(self.db).connect('File Browser > '+drive,['LocalUser','21',drive,'1a', inidir, 1],fileftp)
-  else:
-   if sel=="Recent Places:":return
-   self.file(*os.path.splitdrive(sel))
-
- def conscr(self):
-  self.exit(self.mainscr)
-  self.menu=[
-   (u'Connect', self.activate),
-   (u'New', self.newcon),
-   (u'Edit', self.editcon),
-   (u'Delete', self.delcon),
-   (u'Export...', self.export),
-   (u'Import', self._import)
-    ]
-  self.connections=[u'[New Connection]']
-  l=[]
-  for arr in self.db.items():
-   if not arr[0].find('acc_')==-1:
-    l.append(u(arr[0][4:]))
-  l.sort(lambda x, y: cmp(x.lower(),y.lower()));self.connections+=l
-  self.interface=self.connections
-  app.body=self.disp(self.activate)
-  app.menu=self.menu
-  app.title=u'Connect to...'
 
  def settings(self):
-  self.interface=[
-   (u'Settings Directory', u(self.db.get('settings_dir'))),
-   (u'Default Directory', u(self.db.get('defaultdir'))), 
-   (u'Cache Directory', u(self.db.get('cache_dir')))]
-  app.body=self.disp(self.set)
-  self.exit(self.mainscr)
+        settings = [
+            (u'Settings Directory', u(self.db.get('settings_dir'))),
+            (u'Default Directory', u(self.db.get('defaultdir'))),
+            (u'Cache Directory', u(self.db.get('cache_dir')))]
+        scr_settings = iface.create_screen(exit=self.mainscr,
+            body=iface.listbox(settings, lambda i: self.set(*map(str, i))),
+            title='Settings')
+        iface.set_screen(scr_settings)
 
- def set(self):
-  i=app.body.current()
-  setting=self.interface[i][0]
-  if setting.endswith("Directory"):
-   newdir=util.select("dir",self.interface[i][1])
-   if newdir:
-    if    i==0:self.db.mod('settings_dir',newdir)
-    elif i==1:self.db.mod('defaultdir',newdir)
-    elif i==2:self.db.mod('cache_dir',newdir)
+ def set(self, key, oldvalue):
+        if key.endswith("Directory"):
+            newdir = util.select("dir", oldvalue)
+            if newdir:
+                if key.startswith('Settings'):
+                    self.db.mod('settings_dir',newdir)
+                elif key.startswith('Default'):
+                    self.db.mod('defaultdir',newdir)
+                elif key.startswith('Cache'):
+                    self.db.mod('cache_dir',newdir)
+        self.settings()
 
  def setup(self):
-  self.exit(self.mainscr)
-  self.interface=[
-   (u'Debug Mode', u(self.db.get('debug'))),
-   (u'Database Directory', u(self.db_dir)),
-   (u'Alphabet string', u(self.db.get('a'))),
-   (u'Cache Directory Trees', u(self.db.get("dir_tree")))]
-  app.body=self.disp(self.chset)
+        scr_setup = iface.create_screen(exit=self.mainscr,
+            body=iface.listbox([
+                (u'Debug Mode', u(self.db.get('debug'))),
+                (u'Database Directory', u(self.db_dir)),
+                (u'Alphabet string', u(self.db.get('a'))),
+                (u'Cache Directory Trees', u(self.db.get("dir_tree")))], self.chset),
+            title='Setup')
+        iface.set_screen(scr_setup)
 
  def chset(self):
-  c=app.body.current()
-  if c==0:
-   debug=ui.popup_menu([u'False', u'True'])
-   if debug:
-    self.db.mod('debug', debug)
-  elif c==1:
-   dir=util.select("dir",self.db_dir)
-   if dir:
-    self.ch_db_dir(dir)
-  elif c==2:
-   a=ui.query(u'Alphabet string', 'text',u(self.db.get('a')))
-   if a:self.db.mod('a', a)
-  elif c==3:
-   tree=ui.popup_menu([u'False', u'True'])
-   if tree is not None:
-    self.db.mod('dir_tree', tree)
-  self.setup()
-
-
- def newcon(self):
-  f=self.form([u'',u'',21,u'',u'', u'/', 0])
-  f=ui.Form(f, 17)
-  f.execute()
-  self.savecon(f, 'true')
-
- def editcon(self):
-  name=self.interface[app.body.current()]
-  data=self.db.get('acc_'+name, 'list')
-  form=self.form([
-   u(name),
-   u(data[0]),
-   int(float(data[1])),
-   u(data[2]),
-   u(self.decodestring(data[3],self.db.get('a'))),
-   u(data[4]),
-   int(data[5])
-   ])
-  f=ui.Form(form, 17)
-  f.save_hook=self.savecon
-  f.execute()
-
- def savecon(self, f, dele=0):
-   if f[0][2]==u'' or f[1][2]==u'':
-    ui.note(u'Not enough data provided', 'error')
-    return
-   account=[]
-   for opt in f:
-    account.append(opt[2])
-    if opt[0]=="Password":
-     account[-1]=self.encodestring(opt[2], self.db.get('a'))
-    if opt[0]=="Passive Mode":
-     account[-1]=opt[2][1]
-   del account[0]
-   self.db.mod('acc_'+f[0][2], account)
-   if dele:self.delcon(1)
-   ui.note(u'Saved', 'conf')
-   self.conscr()
-
- def delcon(self,ok=0):
-  name=self.interface[app.body.current()]
-  if not ok:
-   ok=ui.query(u'Are you sure you want to delete "'+name+'"?', 'query')
-  if ok==1:
-   self.db.delete('acc_'+name)
-   self.connections.pop(app.body.current())
-  self.conscr()
-
- def export(self):
-  name=self.interface[app.body.current()]
-  if name=="[New Connection]":return
-  dir=util.select("dir",self.db.get("defaultdir"))
-  if dir:
-   f=open(dir+name+".acc","w")
-   f.write("\n".join(self.db.get("acc_"+name,"list")))
-   f.close()
-   ui.note(u"Successfully exported as '"+u(name)+u".acc'","conf")
- def _import(self):
-  acc=util.select("file",self.db.get("defaultdir"),extwhitelist=["acc"])
-  if not acc:return
-  name=os.path.splitext(os.path.split(acc)[1])[0]
-  f=open(acc);d=f.read();f.close()
-  self.db.mod("acc_"+name,d.split("\n"))
-  self.conscr()
+        c=app.body.current()
+        if c == 0:
+            debug = iface.over_list([u'False', u'True'])
+            if debug:
+                self.db.mod('debug', debug)
+        elif c == 1:
+            dir=util.select("dir",self.db_dir)
+            if dir:
+                self.ch_db_dir(dir)
+        elif c == 2:
+            a=ui.query(u'Alphabet string', 'text',u(self.db.get('a')))
+            if a:
+                self.db.mod('a', a)
+        elif c == 3:
+            tree=ui.popup_menu([u'False', u'True'])
+            if tree is not None:
+                self.db.mod('dir_tree', tree)
+            self.setup()
 
 class ftpclass:
  def __init__(self, db):
@@ -557,8 +639,8 @@ class ftpclass:
   def apprsize(bytes):
     if bytes < 1024:return ""
     for bytename in ["K","M","G","T","P"]:#challenge: legitly return Petabytes!
-     bytes=bytes/1024
-     if bytes < 1024:return ' (%s%sB)'%(bytes,bytename)
+     bytes=bytes/1024.0
+     if bytes < 1024:return ' (%.2f%sB)'%(bytes,bytename)
   info=self.getsel()[1:11]
   dinfo={}
   info[0]="".join(info[0])
@@ -935,6 +1017,6 @@ class ftpclass:
   self.tabs.delete_tab(self.name)
   self.tabs.select_tab(0,1)
 
-i=interface()
-i.run()
-lk.wait()
+if __name__ == '__main__':
+    i = GUI()
+    i.run()
